@@ -5,7 +5,7 @@ The ultimate multi-agent AI writing system powered by **LM Studio**. Transform P
 ## Disclaimer
 This project was developed with the assistance of AI tools. While efforts have been made to ensure quality and accuracy, please review and verify all outputs before use.
 
-**Deep Research Tip**: Always combine Deep Research with a regular research cache for optimal output quality. You can use regular research alone, but avoid using only Deep Research without the cache.
+> **Deep Research Tip**: Always combine Deep Research with a regular research cache for optimal output quality. You can use regular research alone, but avoid using only Deep Research without the cache.
 
 ## License
 This project is licensed under the MIT License for personal, non-commercial use. For organizational or commercial use, please contact [your email or contact info] to discuss licensing terms.
