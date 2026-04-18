@@ -10,7 +10,8 @@ import os
 import re
 from datetime import datetime
 
-CACHE_DIR = "research_cache"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+CACHE_DIR = os.path.join(SCRIPT_DIR, "research_cache")
 
 
 def _ensure_dir():

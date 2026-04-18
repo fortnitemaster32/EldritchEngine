@@ -8,6 +8,8 @@ import time
 import threading
 import re
 import random
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from rich.console import Console
@@ -56,7 +58,7 @@ class AgenticWorkflow:
                  preloaded_research: str = ""):
         self.pdf_path = pdf_path
         self.user_prompt = user_prompt
-        self.log_dir = os.path.join("logs", f"work_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+        self.log_dir = os.path.join(SCRIPT_DIR, "logs", f"work_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
         os.makedirs(self.log_dir, exist_ok=True)
         
         self.pdf_pages = []
@@ -365,7 +367,7 @@ class AgenticWorkflow:
         current_content += f"\n\n---\n## Fact-Check Report\n\n{fact_check_res}"
 
         # FINAL OUTPUT (Unique Filename)
-        os.makedirs("outputs", exist_ok=True)
+        os.makedirs(os.path.join(SCRIPT_DIR, "outputs"), exist_ok=True)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         output_file = os.path.join("outputs", f"final_written_work_{timestamp}.md")
         with open(output_file, "w", encoding="utf-8") as f:

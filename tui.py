@@ -27,6 +27,8 @@ import research_cache
 
 console = Console()
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
 GENRES = [
     "Article / Essay",
     "Short Story",
@@ -48,7 +50,7 @@ def clear_screen():
 
 
 def get_local_files():
-    input_dir = "inputs"
+    input_dir = os.path.join(SCRIPT_DIR, "inputs")
     os.makedirs(input_dir, exist_ok=True)
     extensions = (".pdf", ".png", ".jpg", ".jpeg", ".webp")
     files = []
@@ -593,9 +595,9 @@ def _display_workflow_summary(config: dict):
 
 
 def _save_workflow(config: dict) -> str:
-    os.makedirs("workflows", exist_ok=True)
+    os.makedirs(os.path.join(SCRIPT_DIR, "workflows"), exist_ok=True)
     safe_name  = config["name"].lower().replace(" ", "_").replace("/", "-")
-    save_path  = os.path.join("workflows", f"{safe_name}.json")
+    save_path  = os.path.join(os.path.join(SCRIPT_DIR, "workflows"), f"{safe_name}.json")
     with open(save_path, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=2)
     return save_path
@@ -759,8 +761,8 @@ def run_custom_mode():
         border_style="cyan"
     ))
 
-    os.makedirs("workflows", exist_ok=True)
-    saved = [f for f in os.listdir("workflows") if f.endswith(".json")]
+    os.makedirs(os.path.join(SCRIPT_DIR, "workflows"), exist_ok=True)
+    saved = [f for f in os.listdir(os.path.join(SCRIPT_DIR, "workflows")) if f.endswith(".json")]
 
     # ── Entry: New or Load ────────────────────────────────────────────────────
     entry_choices = [questionary.Choice("Create a new workflow", value="new")]

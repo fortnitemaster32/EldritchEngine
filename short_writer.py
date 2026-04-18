@@ -8,6 +8,8 @@ import os
 import math
 from openai import OpenAI
 from typing import List, Dict
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 from datetime import datetime
 from rich.console import Console
 from rich.panel import Panel
@@ -51,7 +53,7 @@ class ShortWriterWorkflow:
         self.research_notes = research_notes
 
         self.log_dir = os.path.join(
-            "logs", f"short_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            os.path.join(SCRIPT_DIR, "logs"), f"short_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         )
         os.makedirs(self.log_dir, exist_ok=True)
 
@@ -232,7 +234,7 @@ class ShortWriterWorkflow:
         final  = self.edit(draft, outline)
 
         # Save output
-        os.makedirs("outputs", exist_ok=True)
+        os.makedirs(os.path.join(SCRIPT_DIR, "outputs"), exist_ok=True)
         timestamp   = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_file = os.path.join("outputs", f"short_work_{timestamp}.md")
         with open(output_file, "w", encoding="utf-8") as fh:

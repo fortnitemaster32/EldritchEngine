@@ -8,6 +8,8 @@ Phase 3: Synthesis (Chief Scholar combines everything into a master paper).
 
 import os
 import sys
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 import math
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -23,7 +25,7 @@ class DeepResearchWorkflow:
     def __init__(self, pdf_path: str, user_prompt: str):
         self.pdf_path = pdf_path
         self.user_prompt = user_prompt
-        self.log_dir = os.path.join("logs", f"deep_research_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+        self.log_dir = os.path.join(os.path.join(SCRIPT_DIR, "logs"), f"deep_research_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
         os.makedirs(self.log_dir, exist_ok=True)
         
         self.pdf_pages = []
@@ -193,7 +195,7 @@ class DeepResearchWorkflow:
         self._log_step("3_Final_Synthesis", final_paper)
         
         # Save output
-        os.makedirs("outputs", exist_ok=True)
+        os.makedirs(os.path.join(SCRIPT_DIR, "outputs"), exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_file = os.path.join("outputs", f"deep_research_paper_{timestamp}.md")
         with open(output_file, "w", encoding="utf-8") as fh:

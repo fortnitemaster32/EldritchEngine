@@ -8,6 +8,8 @@ import fitz
 import questionary
 
 import agent_writer
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 import research_cache
 
 console = Console()
@@ -35,7 +37,7 @@ class ModularWorkflow:
         self.user_prompt    = _inject_variables(user_prompt, self.variables)
 
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        self.log_dir = os.path.join("logs", f"modular_{timestamp}")
+        self.log_dir = os.path.join(os.path.join(SCRIPT_DIR, "logs"), f"modular_{timestamp}")
         os.makedirs(self.log_dir, exist_ok=True)
 
     # ── Helpers ───────────────────────────────────────────────────────────────
@@ -270,7 +272,7 @@ class ModularWorkflow:
             last_outputs = stage_outputs
 
         # ── Save output ───────────────────────────────────────────────────────
-        os.makedirs("outputs", exist_ok=True)
+        os.makedirs(os.path.join(SCRIPT_DIR, "outputs"), exist_ok=True)
         ts   = datetime.now().strftime('%Y%m%d_%H%M%S')
         path = os.path.join("outputs", f"modular_{ts}.md")
         with open(path, "w", encoding="utf-8") as f:

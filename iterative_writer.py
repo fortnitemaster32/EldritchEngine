@@ -9,6 +9,8 @@ from agent_writer import LMStudioAgent
 
 console = Console()
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
 class IterativeWriterWorkflow:
     def __init__(self, user_prompt: str, research_notes: str, para_count: int = 0, style_choice: str = ""):
         self.user_prompt = user_prompt
@@ -16,7 +18,7 @@ class IterativeWriterWorkflow:
         self.para_count = para_count
         self.style_choice = style_choice
         
-        os.makedirs("outputs", exist_ok=True)
+        os.makedirs(os.path.join(SCRIPT_DIR, "outputs"), exist_ok=True)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         self.output_file = os.path.join("outputs", f"iterative_draft_{timestamp}.md")
         
