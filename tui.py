@@ -20,8 +20,9 @@ from datetime     import datetime
 import agent_writer
 import short_writer
 import iterative_writer
-import research_cache
 import deep_research_mode
+import modular_writer
+import research_cache
 
 console = Console()
 
@@ -526,9 +527,140 @@ def run_iterative_mode():
         console.print(f"\n[bold red]ERROR:[/bold red] {exc}")
         raise
 
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
+def run_custom_mode():
+    console.clear()
+    console.print(Panel.fit(
+        "🛠️  [bold cyan]Custom Workflow Builder[/bold cyan]\n"
+        "[dim]Design your own multi-agent pipeline in plain English.[/dim]",
+        border_style="cyan"
+    ))
+
+    # ── Source Document ──────────────────────────────────────────────────────
+    input_dir = "inputs"
+    os.makedirs(input_dir, exist_ok=True)
+    pdfs = [f for f in os.listdir(input_dir) if f.lower().endswith(".pdf")]
+    if not pdfs:
+        console.print(f"[bold red]No PDFs found in '{input_dir}/'. Add your source document there first.[/bold red]")
+        return
+    pdf_choice = questionary.select("Which source document should agents work from?", choices=pdfs).ask()
+    if not pdf_choice:
+        return
+    pdf_path = os.path.join(input_dir, pdf_choice)
+
+    # ── Topic / Prompt ───────────────────────────────────────────────────────
+    topic = questionary.text("What is the topic or goal of this workflow?").ask()
+    if not topic:
+        return
+
+    # ── Workflow Name ────────────────────────────────────────────────────────
+    workflow_name = questionary.text("Give this workflow a name (e.g. 'Debate & Synthesis'):").ask()
+    if not workflow_name:
+        workflow_name = "My Custom Workflow"
+
+    # ── Build Stages ─────────────────────────────────────────────────────────
+    stages = []
+    console.print("\n[bold yellow]Now let's build your stages. A stage is a group of agents that work together.[/bold yellow]")
+
+    while True:
+        stage_num = len(stages) + 1
+        console.print(f"\n[bold magenta]── Stage {stage_num} ──[/bold magenta]")
+
+        stage_name = questionary.text(f"Name for Stage {stage_num} (e.g. 'First Draft', 'Review', 'Synthesis'):").ask()
+        if not stage_name:
+            stage_name = f"Stage {stage_num}"
+
+        stage_type = questionary.select(
+            "Should the agents in this stage run…",
+            choices=[
+                questionary.Choice("At the same time (parallel) — faster, independent outputs", value="parallel"),
+                questionary.Choice("One after another (sequential) — each agent sees the previous output", value="sequential"),
+            ]
+        ).ask()
+        if not stage_type:
+            break
+
+        stage_instruction = questionary.text(
+            "What is the overall instruction for this stage? (Agents will receive this as their task context):"
+        ).ask() or ""
+
+        # ── Build Agents for this Stage ──────────────────────────────────────
+        agents = []
+        console.print(f"[dim]Now add agents to '{stage_name}'. Each agent has a name, a role, and a system prompt.[/dim]")
+
+        while True:
+            agent_num = len(agents) + 1
+            console.print(f"\n  [bold green]Agent {agent_num}[/bold green]")
+
+            agent_name = questionary.text(f"  Agent {agent_num} name (e.g. 'The Critic', 'Writer A'):").ask()
+            if not agent_name:
+                break
+
+            agent_role = questionary.text(f"  What is {agent_name}'s role in one short phrase (e.g. 'Devil's Advocate'):").ask() or "Worker"
+
+            console.print(f"  [dim]Describe {agent_name}'s personality, expertise and behaviour in plain English.[/dim]")
+            console.print(f"  [dim]Example: 'You are a cynical literary critic. You tear apart every argument with precision and cite weaknesses bluntly.'[/dim]")
+            agent_prompt = questionary.text(f"  {agent_name}'s system prompt:").ask()
+            if not agent_prompt:
+                agent_prompt = f"You are {agent_name}, a {agent_role}. Complete the task thoroughly."
+
+            agents.append({
+                "name": agent_name,
+                "role": agent_role,
+                "system_prompt": agent_prompt
+            })
+
+            if not questionary.confirm(f"  Add another agent to '{stage_name}'?", default=False).ask():
+                break
+
+        if agents:
+            stages.append({
+                "name": stage_name,
+                "type": stage_type,
+                "instruction": stage_instruction,
+                "agents": agents
+            })
+            console.print(f"[green]✔ Stage '{stage_name}' added with {len(agents)} agent(s).[/green]")
+
+        if not questionary.confirm("Add another stage to this workflow?", default=False).ask():
+            break
+
+    if not stages:
+        console.print("[red]No stages defined. Returning to menu.[/red]")
+        return
+
+    # ── Review & Confirm ─────────────────────────────────────────────────────
+    console.print("\n[bold gold1]── Workflow Summary ──[/bold gold1]")
+    console.print(f"[bold]Name:[/bold]  {workflow_name}")
+    console.print(f"[bold]Topic:[/bold] {topic}")
+    for s_idx, s in enumerate(stages):
+        console.print(f"\n  [bold magenta]Stage {s_idx+1}: {s['name']} ({s['type']})[/bold magenta]")
+        console.print(f"  Instruction: [dim]{s['instruction'] or '(none)'}[/dim]")
+        for a in s["agents"]:
+            console.print(f"    • [green]{a['name']}[/green] [{a['role']}] — {a['system_prompt'][:60]}...")
+
+    if not questionary.confirm("\nLooks good? Run this workflow now?").ask():
+        return
+
+    # ── Optionally Save ──────────────────────────────────────────────────────
+    if questionary.confirm("Save this workflow so you can reuse it later?", default=False).ask():
+        os.makedirs("workflows", exist_ok=True)
+        safe_name = workflow_name.lower().replace(" ", "_").replace("/", "-")
+        save_path = os.path.join("workflows", f"{safe_name}.json")
+        config = {"name": workflow_name, "stages": stages}
+        with open(save_path, "w", encoding="utf-8") as f:
+            import json
+            json.dump(config, f, indent=2)
+        console.print(f"[green]Saved to {save_path}[/green]")
+
+    # ── Execute ──────────────────────────────────────────────────────────────
+    config = {"name": workflow_name, "stages": stages}
+    wf = modular_writer.ModularWorkflow(config, pdf_path, topic)
+    wf.run()
 
 def main():
     clear_screen()
@@ -557,6 +689,10 @@ def main():
                 title="✍️   Short Writing    — Lean pipeline for articles, stories & more",
                 value="short"
             ),
+            questionary.Choice(
+                title="🛠️   Custom Workflow  — Run your own modular agent pipelines",
+                value="custom"
+            ),
         ]
     ).ask()
 
@@ -576,7 +712,8 @@ def main():
         run_iterative_mode()
     elif mode == "short":
         run_short_mode()
-
+    elif mode == "custom":
+        run_custom_mode()
 
 if __name__ == "__main__":
     main()
