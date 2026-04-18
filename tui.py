@@ -532,86 +532,156 @@ def run_iterative_mode():
 # Entry point
 # ---------------------------------------------------------------------------
 
-def run_custom_mode():
-    console.clear()
-    console.print(Panel.fit(
-        "🛠️  [bold cyan]Custom Workflow Builder[/bold cyan]\n"
-        "[dim]Design your own multi-agent pipeline in plain English.[/dim]",
-        border_style="cyan"
-    ))
+def _ai_generate_system_prompt(agent_name: str, agent_role: str, workflow_topic: str, description: str) -> str:
+    """Ask the local LLM to write a system prompt for the agent."""
+    helper = agent_writer.LMStudioAgent(
+        "Prompt Engineer", "Meta Agent",
+        "You are an expert AI prompt engineer. Write a precise, effective system prompt for an AI agent based on the description. Output ONLY the system prompt text itself, no commentary."
+    )
+    request = (
+        f"Write a system prompt for an AI agent with these details:\n"
+        f"- Name: {agent_name}\n"
+        f"- Role: {agent_role}\n"
+        f"- Workflow Topic: {workflow_topic}\n"
+        f"- What this agent should do: {description}\n"
+    )
+    with console.status("[cyan]AI is generating the system prompt…[/cyan]"):
+        result = helper.chat(request, context="")
+    return result.strip()
 
-    # ── Source Document ──────────────────────────────────────────────────────
-    input_dir = "inputs"
-    os.makedirs(input_dir, exist_ok=True)
-    pdfs = [f for f in os.listdir(input_dir) if f.lower().endswith(".pdf")]
-    if not pdfs:
-        console.print(f"[bold red]No PDFs found in '{input_dir}/'. Add your source document there first.[/bold red]")
-        return
-    pdf_choice = questionary.select("Which source document should agents work from?", choices=pdfs).ask()
-    if not pdf_choice:
-        return
-    pdf_path = os.path.join(input_dir, pdf_choice)
 
-    # ── Topic / Prompt ───────────────────────────────────────────────────────
-    topic = questionary.text("What is the topic or goal of this workflow?").ask()
-    if not topic:
-        return
+def _build_context_feed_choice(stage_idx: int, all_stages: list) -> str:
+    """Ask the user how this agent should receive its input context."""
+    choices = [
+        questionary.Choice("Entire accumulated conversation state (default)", value="all_previous"),
+        questionary.Choice("Topic/goal only — no prior outputs", value="topic_only"),
+        questionary.Choice("Research notes only — no prior outputs", value="research_only"),
+        questionary.Choice("All outputs from the previous stage", value="last_stage_all"),
+    ]
+    if stage_idx > 0:
+        prev_stage = all_stages[stage_idx - 1]
+        for a in prev_stage.get("agents", []):
+            choices.append(questionary.Choice(
+                f"Only the output of '{a['name']}' from the previous stage",
+                value=f"last_stage_agent:{a['name']}"
+            ))
 
-    # ── Workflow Name ────────────────────────────────────────────────────────
+    feed = questionary.select("What information should this agent receive?", choices=choices).ask()
+    return feed or "all_previous"
+
+
+def _display_workflow_summary(config: dict):
+    console.print("\n[bold gold1]── Workflow Summary ──[/bold gold1]")
+    console.print(f"  [bold]Name:[/bold]  {config['name']}")
+    console.print(f"  [bold]Research:[/bold] {'Yes' if config.get('requires_research') else 'No'}")
+    for s_idx, s in enumerate(config.get("stages", [])):
+        console.print(f"\n  [bold magenta]Stage {s_idx+1}: {s['name']} ({s['type']})[/bold magenta]")
+        console.print(f"  Instruction: [dim]{s.get('instruction') or '(none)'}[/dim]")
+        for a in s.get("agents", []):
+            feed_label = a.get("context_feed", "all_previous")
+            preview    = a.get("system_prompt", "")[:60]
+            console.print(
+                f"    • [green]{a['name']}[/green] [{a['role']}]  feed=[cyan]{feed_label}[/cyan]\n"
+                f"      prompt: [dim]{preview}…[/dim]"
+            )
+
+
+def _save_workflow(config: dict) -> str:
+    os.makedirs("workflows", exist_ok=True)
+    safe_name  = config["name"].lower().replace(" ", "_").replace("/", "-")
+    save_path  = os.path.join("workflows", f"{safe_name}.json")
+    with open(save_path, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2)
+    return save_path
+
+
+def _build_workflow_tui(topic: str) -> dict | None:
+    """Interactive builder — returns a config dict or None on cancel."""
+
     workflow_name = questionary.text("Give this workflow a name (e.g. 'Debate & Synthesis'):").ask()
     if not workflow_name:
-        workflow_name = "My Custom Workflow"
+        return None
+    workflow_name = workflow_name.strip() or "My Custom Workflow"
 
-    # ── Build Stages ─────────────────────────────────────────────────────────
-    stages = []
-    console.print("\n[bold yellow]Now let's build your stages. A stage is a group of agents that work together.[/bold yellow]")
+    requires_research = questionary.confirm(
+        "Does this workflow need source material (PDF / research cache)?",
+        default=False
+    ).ask()
+
+    stages: list[dict] = []
+    console.print("\n[bold yellow]Now build your stages. A stage is a group of agents that run together.[/bold yellow]")
 
     while True:
         stage_num = len(stages) + 1
         console.print(f"\n[bold magenta]── Stage {stage_num} ──[/bold magenta]")
 
-        stage_name = questionary.text(f"Name for Stage {stage_num} (e.g. 'First Draft', 'Review', 'Synthesis'):").ask()
-        if not stage_name:
-            stage_name = f"Stage {stage_num}"
+        stage_name = (
+            questionary.text(f"Name for Stage {stage_num} (e.g. 'Draft', 'Review', 'Synthesis'):").ask()
+            or f"Stage {stage_num}"
+        )
 
         stage_type = questionary.select(
-            "Should the agents in this stage run…",
+            "Should agents in this stage run…",
             choices=[
-                questionary.Choice("At the same time (parallel) — faster, independent outputs", value="parallel"),
-                questionary.Choice("One after another (sequential) — each agent sees the previous output", value="sequential"),
+                questionary.Choice("At the same time (parallel) — independent outputs", value="parallel"),
+                questionary.Choice("One after another (sequential) — each sees previous output", value="sequential"),
             ]
         ).ask()
         if not stage_type:
             break
 
-        stage_instruction = questionary.text(
-            "What is the overall instruction for this stage? (Agents will receive this as their task context):"
-        ).ask() or ""
+        stage_instruction = (
+            questionary.text("Overall instruction for this stage (context for all agents):").ask() or ""
+        )
 
-        # ── Build Agents for this Stage ──────────────────────────────────────
-        agents = []
-        console.print(f"[dim]Now add agents to '{stage_name}'. Each agent has a name, a role, and a system prompt.[/dim]")
+        agents: list[dict] = []
+        console.print(f"[dim]Add agents to '{stage_name}'. Each needs a name, role and system prompt.[/dim]")
 
         while True:
             agent_num = len(agents) + 1
             console.print(f"\n  [bold green]Agent {agent_num}[/bold green]")
 
-            agent_name = questionary.text(f"  Agent {agent_num} name (e.g. 'The Critic', 'Writer A'):").ask()
+            agent_name = questionary.text(f"  Name (e.g. 'The Critic', 'Writer A'):").ask()
             if not agent_name:
                 break
+            agent_name = agent_name.strip()
 
-            agent_role = questionary.text(f"  What is {agent_name}'s role in one short phrase (e.g. 'Devil's Advocate'):").ask() or "Worker"
+            agent_role = (
+                questionary.text(f"  One-line role (e.g. 'Devil's Advocate'):").ask() or "Worker"
+            ).strip()
 
-            console.print(f"  [dim]Describe {agent_name}'s personality, expertise and behaviour in plain English.[/dim]")
-            console.print(f"  [dim]Example: 'You are a cynical literary critic. You tear apart every argument with precision and cite weaknesses bluntly.'[/dim]")
-            agent_prompt = questionary.text(f"  {agent_name}'s system prompt:").ask()
-            if not agent_prompt:
-                agent_prompt = f"You are {agent_name}, a {agent_role}. Complete the task thoroughly."
+            # System prompt: manual or AI-generated
+            prompt_mode = questionary.select(
+                f"  How should {agent_name}'s system prompt be created?",
+                choices=[
+                    questionary.Choice("I'll write it myself", value="manual"),
+                    questionary.Choice("Let the AI generate it from my description", value="ai"),
+                ]
+            ).ask()
+
+            if prompt_mode == "ai":
+                description = questionary.text(
+                    f"  Describe what {agent_name} should do (plain English):"
+                ).ask() or f"{agent_name} completes the task."
+                agent_prompt = _ai_generate_system_prompt(agent_name, agent_role, topic, description)
+                console.print(Panel(agent_prompt, title=f"{agent_name} — Generated Prompt", border_style="cyan"))
+                if not questionary.confirm("  Use this generated prompt?", default=True).ask():
+                    agent_prompt = questionary.text(f"  Edit the prompt:").ask() or agent_prompt
+            else:
+                console.print(f"  [dim]Example: 'You are a cynical literary critic who tears apart every argument bluntly.'[/dim]")
+                agent_prompt = (
+                    questionary.text(f"  {agent_name}'s system prompt:").ask()
+                    or f"You are {agent_name}, a {agent_role}. Complete the task thoroughly."
+                )
+
+            # Context feed
+            context_feed = _build_context_feed_choice(len(stages), stages)
 
             agents.append({
-                "name": agent_name,
-                "role": agent_role,
-                "system_prompt": agent_prompt
+                "name":         agent_name,
+                "role":         agent_role,
+                "system_prompt": agent_prompt,
+                "context_feed": context_feed,
             })
 
             if not questionary.confirm(f"  Add another agent to '{stage_name}'?", default=False).ask():
@@ -619,48 +689,136 @@ def run_custom_mode():
 
         if agents:
             stages.append({
-                "name": stage_name,
-                "type": stage_type,
+                "name":        stage_name,
+                "type":        stage_type,
                 "instruction": stage_instruction,
-                "agents": agents
+                "agents":      agents,
             })
-            console.print(f"[green]✔ Stage '{stage_name}' added with {len(agents)} agent(s).[/green]")
+            console.print(f"[green]✔ Stage '{stage_name}' added ({len(agents)} agent(s)).[/green]")
 
-        if not questionary.confirm("Add another stage to this workflow?", default=False).ask():
+        if not questionary.confirm("Add another stage?", default=False).ask():
             break
 
     if not stages:
-        console.print("[red]No stages defined. Returning to menu.[/red]")
+        console.print("[red]No stages defined. Cancelling.[/red]")
+        return None
+
+    return {
+        "name":              workflow_name,
+        "requires_research": requires_research,
+        "stages":            stages,
+    }
+
+
+def _get_research_for_workflow(workflow_name: str) -> str:
+    """Let user pick a PDF/cached research, or skip. Returns research text."""
+    cache_dir = "research_cache"
+    os.makedirs(cache_dir, exist_ok=True)
+    cached = [f for f in os.listdir(cache_dir) if f.endswith(".md")]
+
+    input_dir = "inputs"
+    os.makedirs(input_dir, exist_ok=True)
+    pdfs = [f for f in os.listdir(input_dir) if f.lower().endswith(".pdf")]
+
+    source_choices = []
+    if cached:
+        source_choices.append(questionary.Choice("Use a cached research file", value="cache"))
+    if pdfs:
+        source_choices.append(questionary.Choice("Load a PDF and cache it now", value="pdf"))
+    source_choices.append(questionary.Choice("Skip — no research material", value="none"))
+
+    source = questionary.select("Source material:", choices=source_choices).ask()
+
+    if source == "cache":
+        chosen = questionary.select("Select cached research:", choices=cached).ask()
+        if chosen:
+            with open(os.path.join(cache_dir, chosen), "r", encoding="utf-8") as f:
+                return f.read()
+
+    elif source == "pdf":
+        pdf_choice = questionary.select("Select PDF:", choices=pdfs).ask()
+        if pdf_choice:
+            pdf_path = os.path.join(input_dir, pdf_choice)
+            notes    = research_cache.get_or_create_cache(pdf_path, modular_writer.extract_pdf_text)
+            return notes
+
+    return ""
+
+
+def run_custom_mode():
+    console.clear()
+    console.print(Panel.fit(
+        "🛠️  [bold cyan]Custom Workflow Mode[/bold cyan]\n"
+        "[dim]Design and run your own multi-agent pipelines.[/dim]",
+        border_style="cyan"
+    ))
+
+    os.makedirs("workflows", exist_ok=True)
+    saved = [f for f in os.listdir("workflows") if f.endswith(".json")]
+
+    # ── Entry: New or Load ────────────────────────────────────────────────────
+    entry_choices = [questionary.Choice("Create a new workflow", value="new")]
+    if saved:
+        entry_choices.append(questionary.Choice("Run a saved workflow", value="run"))
+        entry_choices.append(questionary.Choice("Delete a saved workflow", value="delete"))
+
+    action = questionary.select("What would you like to do?", choices=entry_choices).ask()
+    if not action:
         return
 
-    # ── Review & Confirm ─────────────────────────────────────────────────────
-    console.print("\n[bold gold1]── Workflow Summary ──[/bold gold1]")
-    console.print(f"[bold]Name:[/bold]  {workflow_name}")
-    console.print(f"[bold]Topic:[/bold] {topic}")
-    for s_idx, s in enumerate(stages):
-        console.print(f"\n  [bold magenta]Stage {s_idx+1}: {s['name']} ({s['type']})[/bold magenta]")
-        console.print(f"  Instruction: [dim]{s['instruction'] or '(none)'}[/dim]")
-        for a in s["agents"]:
-            console.print(f"    • [green]{a['name']}[/green] [{a['role']}] — {a['system_prompt'][:60]}...")
+    # ── Load Saved ────────────────────────────────────────────────────────────
+    if action == "run":
+        chosen = questionary.select("Choose a saved workflow:", choices=saved).ask()
+        if not chosen:
+            return
+        with open(os.path.join("workflows", chosen), "r", encoding="utf-8") as f:
+            config = json.load(f)
+        _display_workflow_summary(config)
 
-    if not questionary.confirm("\nLooks good? Run this workflow now?").ask():
+    elif action == "delete":
+        chosen = questionary.select("Choose workflow to delete:", choices=saved).ask()
+        if chosen and questionary.confirm(f"Delete '{chosen}'?", default=False).ask():
+            os.remove(os.path.join("workflows", chosen))
+            console.print(f"[red]Deleted {chosen}.[/red]")
         return
 
-    # ── Optionally Save ──────────────────────────────────────────────────────
-    if questionary.confirm("Save this workflow so you can reuse it later?", default=False).ask():
-        os.makedirs("workflows", exist_ok=True)
-        safe_name = workflow_name.lower().replace(" ", "_").replace("/", "-")
-        save_path = os.path.join("workflows", f"{safe_name}.json")
-        config = {"name": workflow_name, "stages": stages}
-        with open(save_path, "w", encoding="utf-8") as f:
-            import json
-            json.dump(config, f, indent=2)
-        console.print(f"[green]Saved to {save_path}[/green]")
+    # ── Build New ─────────────────────────────────────────────────────────────
+    else:
+        topic = questionary.text("What is the topic or goal of this workflow?").ask()
+        if not topic:
+            return
 
-    # ── Execute ──────────────────────────────────────────────────────────────
-    config = {"name": workflow_name, "stages": stages}
-    wf = modular_writer.ModularWorkflow(config, pdf_path, topic)
+        config = _build_workflow_tui(topic)
+        if not config:
+            return
+        config["topic"] = topic
+
+        _display_workflow_summary(config)
+
+        if not questionary.confirm("\nLooks good?").ask():
+            return
+
+        # Always save new workflows
+        save_path = _save_workflow(config)
+        console.print(f"[green]✔ Workflow saved to {save_path}[/green]")
+
+    # ── Topic override for saved workflows ────────────────────────────────────
+    if action == "run":
+        topic = config.get("topic", "")
+        override = questionary.text(
+            f"Topic/prompt for this run (Enter to use saved: '{topic[:60]}'):").ask()
+        if override:
+            topic = override
+
+    # ── Research material ─────────────────────────────────────────────────────
+    research_notes = ""
+    if config.get("requires_research"):
+        research_notes = _get_research_for_workflow(config["name"])
+
+    # ── Run ───────────────────────────────────────────────────────────────────
+    wf = modular_writer.ModularWorkflow(config, topic, research_notes)
     wf.run()
+
 
 def main():
     clear_screen()
