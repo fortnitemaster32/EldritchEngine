@@ -1,5 +1,5 @@
 """
-tui.py — Agentic Writer Studio — Main Launcher
+tui.py — EldritchEngine — Main Launcher
 Modes:
   🔬  Research Mode   — Run the Scholar on a PDF and save notes to cache
   📝  Essay Mode      — Full multi-agent essay pipeline (agent_writer.py)
@@ -62,8 +62,8 @@ def get_local_files():
 
 def print_header():
     console.print(Panel.fit(
-        "[bold gold1]AGENTIC WRITER STUDIO[/bold gold1]\n"
-        "[dim]Multi-Agent Writing Engine  •  v2.0[/dim]",
+        "[bold gold1]EldritchEngine[/bold gold1]\n"
+        "[dim]Eldritch Writing Engine  •  v2.0[/dim]",
         border_style="gold1",
         padding=(1, 6)
     ))
