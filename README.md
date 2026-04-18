@@ -20,19 +20,28 @@ A massive 7-stage pipeline for deep, complex topics:
 6.  **The Reviewers**: Auditor (Logic/Accuracy) and Stylist (Tone/Flow) perform an in-depth critique.
 7.  **The Editors**: Sculptor (Structure) and Finisher (Final Polish) create the definitive version.
 
+### 🔄 Iterative Mode
+Plan an outline, then generate and review paragraph-by-paragraph with live feedback for precise control.
+
 ### ✍️ Short Writing Mode
 A highly efficient, rolling-window pipeline for articles, stories, and op-eds:
 1. **The Planner**: Constructs a precise, section-by-section outline.
 2. **The Writer**: Composes the prose using a sliding context window to maintain perfect continuity without exceeding context limits.
 3. **The Editor**: Polishes the draft for flow and impact.
 
+### 🛠️ Custom Workflow Mode
+Design and run your own multi-agent pipelines. Build custom stages with sequential or parallel agents, each with tailored system prompts and context feeds.
+
 ## 📁 Project Structure
 - `tui.py`: The main interactive Terminal User Interface.
 - `agent_writer.py`: The core engine orchestrating the full Essay mode.
 - `short_writer.py`: The lean engine for short-form content.
+- `iterative_writer.py`: The engine for paragraph-by-paragraph iterative writing with review.
 - `deep_research_mode.py`: The orchestrator for the parallel PhD debate protocol.
+- `modular_writer.py`: The engine for custom user-defined workflows.
 - `research_cache.py`: Utilities for saving and loading Scholar notes to skip re-reading PDFs.
 - `prompts/`: **Customizable agent personalities.** Edit these Markdown files to change how agents behave.
+- `workflows/`: Saved JSON configurations for custom workflows.
 - `outputs/`: Finished documents are saved here.
 - `logs/`: Detailed session logs, intermediate drafts, and step-by-step outputs.
 - `research_cache/`: Saved JSON files containing extracted PDF context.

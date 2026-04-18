@@ -8,6 +8,7 @@ Modes:
 """
 
 import os
+import json
 import sys
 import textwrap
 import questionary
@@ -274,28 +275,32 @@ def run_essay_mode():
 
     # --- Research source ---
     research_notes = ""
-    use_cache = questionary.confirm(
-        "Use cached research? (No = select a PDF to research fresh)",
+    selected_pdf = ""
+    use_research = questionary.confirm(
+        "Use research material (PDF or cache)? [bold green]Highly recommended[/bold green] for deep, informed essays. (No = write from prompt only)",
         default=True
     ).ask()
 
-    selected_pdf = ""
-    if use_cache:
-        research_notes = pick_cache()
-        if not research_notes:
-            console.print("[yellow]No cache selected. Falling back to fresh research.[/yellow]")
-            use_cache = False
+    if use_research:
+        use_cache = questionary.confirm(
+            "Use cached research? (No = select a PDF to research fresh)",
+            default=True
+        ).ask()
 
-    if not use_cache:
-        local_files = get_local_files()
-        choices = ["[PROMPT ONLY] No source file"] + local_files
-        chosen = questionary.checkbox(
-            "Select PDF(s) to process:",
-            choices=choices
-        ).ask() or []
-        is_prompt_only = "[PROMPT ONLY] No source file" in chosen
-        chosen = [f for f in chosen if f != "[PROMPT ONLY] No source file"]
-        selected_pdf = chosen[0] if chosen else ""
+        if use_cache:
+            research_notes = pick_cache()
+            if not research_notes:
+                console.print("[yellow]No cache selected. Falling back to fresh research.[/yellow]")
+                use_cache = False
+
+        if not use_cache:
+            local_files = get_local_files()
+            choices = local_files  # Removed the prompt only option since it's now separate
+            chosen = questionary.checkbox(
+                "Select PDF(s) to process:",
+                choices=choices
+            ).ask() or []
+            selected_pdf = chosen[0] if chosen else ""
 
     # --- Prompt ---
     user_prompt = questionary.text(
@@ -536,7 +541,7 @@ def _ai_generate_system_prompt(agent_name: str, agent_role: str, workflow_topic:
     """Ask the local LLM to write a system prompt for the agent."""
     helper = agent_writer.LMStudioAgent(
         "Prompt Engineer", "Meta Agent",
-        "You are an expert AI prompt engineer. Write a precise, effective system prompt for an AI agent based on the description. Output ONLY the system prompt text itself, no commentary."
+        "You are an expert AI prompt engineer. Write a precise, effective system prompt for an AI agent based on the description. Ensure the generated system prompt instructs the agent to produce direct, concise outputs without unnecessary introductions, meta-commentary, or fluff. Output ONLY the system prompt text itself, no commentary."
     )
     request = (
         f"Write a system prompt for an AI agent with these details:\n"
@@ -544,6 +549,7 @@ def _ai_generate_system_prompt(agent_name: str, agent_role: str, workflow_topic:
         f"- Role: {agent_role}\n"
         f"- Workflow Topic: {workflow_topic}\n"
         f"- What this agent should do: {description}\n"
+        f"Ensure the prompt forbids the agent from adding extra fluff, introductions, or meta-comments in their outputs; focus on direct, concise responses.\n"
     )
     with console.status("[cyan]AI is generating the system prompt…[/cyan]"):
         result = helper.chat(request, context="")
@@ -761,9 +767,10 @@ def run_custom_mode():
     if saved:
         entry_choices.append(questionary.Choice("Run a saved workflow", value="run"))
         entry_choices.append(questionary.Choice("Delete a saved workflow", value="delete"))
+    entry_choices.append(questionary.Choice("Back to Main Menu", value="back"))
 
     action = questionary.select("What would you like to do?", choices=entry_choices).ask()
-    if not action:
+    if not action or action == "back":
         return
 
     # ── Load Saved ────────────────────────────────────────────────────────────
@@ -821,57 +828,63 @@ def run_custom_mode():
 
 
 def main():
-    clear_screen()
-    print_header()
+    while True:
+        clear_screen()
+        print_header()
 
-    mode = questionary.select(
-        "Select a mode:",
-        choices=[
-            questionary.Choice(
-                title="🔬  Research Mode    — Run the Scholar on a PDF, save to cache",
-                value="research"
-            ),
-            questionary.Choice(
-                title="🏛️   Deep Research    — 4 PhDs analyze, debate, and synthesize a master paper",
-                value="deep_research"
-            ),
-            questionary.Choice(
-                title="📝  Essay Mode       — Full multi-agent deep-analysis essay",
-                value="essay"
-            ),
-            questionary.Choice(
-                title="🔄  Iterative Mode   — Plan and write paragraph-by-paragraph with live review",
-                value="iterative"
-            ),
-            questionary.Choice(
-                title="✍️   Short Writing    — Lean pipeline for articles, stories & more",
-                value="short"
-            ),
-            questionary.Choice(
-                title="🛠️   Custom Workflow  — Run your own modular agent pipelines",
-                value="custom"
-            ),
-        ]
-    ).ask()
+        mode = questionary.select(
+            "Select a mode:",
+            choices=[
+                questionary.Choice(
+                    title="🔬  Research Mode    — Run the Scholar on a PDF, save to cache",
+                    value="research"
+                ),
+                questionary.Choice(
+                    title="🏛️   Deep Research    — 4 PhDs analyze, debate, and synthesize a master paper",
+                    value="deep_research"
+                ),
+                questionary.Choice(
+                    title="📝  Essay Mode       — Full multi-agent deep-analysis essay",
+                    value="essay"
+                ),
+                questionary.Choice(
+                    title="🔄  Iterative Mode   — Plan and write paragraph-by-paragraph with live review",
+                    value="iterative"
+                ),
+                questionary.Choice(
+                    title="✍️   Short Writing    — Lean pipeline for articles, stories & more",
+                    value="short"
+                ),
+                questionary.Choice(
+                    title="🛠️   Custom Workflow  — Run your own modular agent pipelines",
+                    value="custom"
+                ),
+            ]
+        ).ask()
 
-    if not mode:
-        sys.exit(0)
+        if not mode:
+            break
 
-    clear_screen()
-    print_header()
+        clear_screen()
+        print_header()
 
-    if mode == "research":
-        run_research_mode()
-    elif mode == "deep_research":
-        run_deep_research_mode()
-    elif mode == "essay":
-        run_essay_mode()
-    elif mode == "iterative":
-        run_iterative_mode()
-    elif mode == "short":
-        run_short_mode()
-    elif mode == "custom":
-        run_custom_mode()
+        if mode == "research":
+            run_research_mode()
+        elif mode == "deep_research":
+            run_deep_research_mode()
+        elif mode == "essay":
+            run_essay_mode()
+        elif mode == "iterative":
+            run_iterative_mode()
+        elif mode == "short":
+            run_short_mode()
+        elif mode == "custom":
+            run_custom_mode()
+
+        console.print("\n[bold green]✓ Mode completed![/bold green]")
+
+        if not questionary.confirm("Return to main menu?", default=True).ask():
+            break
 
 if __name__ == "__main__":
     main()
