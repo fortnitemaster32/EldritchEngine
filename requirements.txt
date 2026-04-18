@@ -1,0 +1,6 @@
+openai
+pymupdf
+python-dotenv
+rich
+questionary
+pillow

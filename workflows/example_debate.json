@@ -1,0 +1,35 @@
+{
+  "name": "Custom 2-Agent Debate",
+  "description": "A workflow where two agents debate a topic and a judge synthesizes the final answer.",
+  "stages": [
+    {
+      "name": "Initial Drafts",
+      "type": "parallel",
+      "instruction": "Draft an argument based on the topic. The Defender will support it, the Attacker will destroy it.",
+      "agents": [
+        {
+          "name": "The Defender",
+          "role": "Proponent",
+          "prompt_file": "writer_storyteller.md"
+        },
+        {
+          "name": "The Attacker",
+          "role": "Critic",
+          "prompt_file": "writer_challenger.md"
+        }
+      ]
+    },
+    {
+      "name": "Final Synthesis",
+      "type": "sequential",
+      "instruction": "Read the arguments from the previous stage. Combine the best points into a final, unified conclusion.",
+      "agents": [
+        {
+          "name": "The Judge",
+          "role": "Synthesizer",
+          "prompt_file": "editor_finisher.md"
+        }
+      ]
+    }
+  ]
+}
