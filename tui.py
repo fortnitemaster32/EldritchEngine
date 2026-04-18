@@ -780,14 +780,14 @@ def run_custom_mode():
         chosen = questionary.select("Choose a saved workflow:", choices=saved).ask()
         if not chosen:
             return
-        with open(os.path.join("workflows", chosen), "r", encoding="utf-8") as f:
+        with open(os.path.join(os.path.join(SCRIPT_DIR, "workflows"), chosen), "r", encoding="utf-8") as f:
             config = json.load(f)
         _display_workflow_summary(config)
 
     elif action == "delete":
         chosen = questionary.select("Choose workflow to delete:", choices=saved).ask()
         if chosen and questionary.confirm(f"Delete '{chosen}'?", default=False).ask():
-            os.remove(os.path.join("workflows", chosen))
+            os.remove(os.path.join(os.path.join(SCRIPT_DIR, "workflows"), chosen))
             console.print(f"[red]Deleted {chosen}.[/red]")
         return
 

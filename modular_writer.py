@@ -43,7 +43,7 @@ class ModularWorkflow:
     # ── Helpers ───────────────────────────────────────────────────────────────
 
     def _load_prompt(self, filename: str) -> str:
-        path = os.path.join("prompts", filename)
+        path = os.path.join(SCRIPT_DIR, "prompts", filename)
         if os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
                 return f.read().strip()
