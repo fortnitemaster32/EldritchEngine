@@ -19,14 +19,11 @@ Instead of researching on every single run, research is now separated and cached
 - **Deep Research Protocol (4 Parallel PhDs)**: For exhaustive analysis, four specialists (Philosophy, Psychology, Literature, Sociology) process the text in parallel. They then **debate and critique** each other's findings before a **Chief Scholar** synthesizes a massive, multi-disciplinary master paper.
 
 ### Essay Mode
-A massive 7-stage pipeline for deep, complex topics:
-1.  **The Architect**: Analyzes your project and drafts a comprehensive Strategic Plan.
-2.  **The Lexicographer**: Curates a "thesaurus" of ~200 sophisticated, topic-specific terms.
-3.  **The Writers**: Four distinct personalities (Visionary, Analyst, Challenger, Storyteller) draft sections in parallel.
-4.  **The Weaver**: Integrates the curated vocabulary seamlessly into the raw drafts.
-5.  **The Precisionist**: Performs parallel paragraph-by-paragraph synonym refinement for maximum impact.
-6.  **The Reviewers**: Auditor (Logic/Accuracy) and Stylist (Tone/Flow) perform an in-depth critique.
-7.  **The Editors**: Sculptor (Structure) and Finisher (Final Polish) create the definitive version.
+A comprehensive 4-phase pipeline for deep, complex topics:
+1. **The Architect**: Analyzes your project and drafts a comprehensive Strategic Plan, assigning sections to writers.
+2. **The Writers**: Four distinct personalities (Visionary, Analyst, Challenger, Storyteller) draft sections in parallel.
+3. **The Reviewers**: Auditor (Logic/Accuracy) and Stylist (Tone/Flow) perform parallel in-depth critiques.
+4. **The Editors**: Sculptor (Structure) and Finisher (Final Polish) create the definitive version through sequential editing passes.
 
 ### Iterative Mode
 This mode provides a structured, iterative approach to writing. First, a planner agent generates a detailed outline based on your topic. Then, the writing process proceeds paragraph by paragraph: each paragraph is drafted by a writer agent, reviewed by a critic for improvements, and edited if necessary. This allows for live feedback and revisions at each step, ensuring high precision and quality control throughout the composition.
@@ -50,6 +47,7 @@ Design and run your own multi-agent pipelines. Build custom stages with sequenti
 - `research_cache.py`: Utilities for saving and loading Scholar notes to skip re-reading PDFs.
 - `prompts/`: **Customizable agent personalities.** Edit these Markdown files to change how agents behave.
 - `workflows/`: Saved JSON configurations for custom workflows.
+- `inputs/`: Place your PDF and image files here for processing.
 - `outputs/`: Finished documents are saved here.
 - `logs/`: Detailed session logs, intermediate drafts, and step-by-step outputs.
 - `research_cache/`: Saved JSON files containing extracted PDF context.
