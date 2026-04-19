@@ -329,8 +329,8 @@ Output in clean Markdown format.
         chapters = []
         current_chapter = None
         current_pages = []
-        chapter_pattern = re.compile(r'\*\*Chapter\s*\d+:', re.IGNORECASE)
-        page_pattern = re.compile(r'-\s*Page\s*\d+:', re.IGNORECASE)
+        chapter_pattern = re.compile(r'Chapter\s*\d+:', re.IGNORECASE)
+        page_pattern = re.compile(r'[•\-]\s*Page\s*\d+:', re.IGNORECASE)
 
         for line in plan.splitlines():
             stripped = line.strip()
@@ -340,7 +340,7 @@ Output in clean Markdown format.
             if chapter_pattern.search(stripped):
                 if current_chapter:
                     chapters.append({"title": current_chapter, "pages": current_pages})
-                current_chapter = stripped.replace('**', '').strip()
+                current_chapter = stripped
                 current_pages = []
                 continue
 
