@@ -33,10 +33,10 @@ A comprehensive 4-phase pipeline for deep, complex topics:
 This mode provides a structured, iterative approach to writing. First, a planner agent generates a detailed outline based on your topic. Then, the writing process proceeds paragraph by paragraph: each paragraph is drafted by a writer agent, reviewed by a critic for improvements, and edited if necessary. This allows for live feedback and revisions at each step, ensuring high precision and quality control throughout the composition.
 
 ### Short Writing Mode
-A highly efficient, rolling-window pipeline for articles, stories, and op-eds:
+A highly efficient, parallel-writer pipeline for articles, stories, and op-eds:
 1. **The Planner**: Constructs a precise, section-by-section outline.
-2. **The Writer**: Composes the prose using a sliding context window to maintain perfect continuity without exceeding context limits.
-3. **The Editor**: Polishes the draft for flow and impact.
+2. **Two Parallel Writers**: Generate the same piece from different creative approaches—one emphasizing imagination, imagery, and emotional depth; the other prioritizing clarity, logical flow, and structural integrity.
+3. **The Editor**: Merges the best parts of both drafts into a final, polished piece, preserving strong imagery and bold expression alongside clear, coherent structure. Uses the original research cache when available.
 
 ### Custom Workflow Mode
 Design and run your own multi-agent pipelines. Build custom stages with sequential or parallel agents, each with tailored system prompts and context feeds.

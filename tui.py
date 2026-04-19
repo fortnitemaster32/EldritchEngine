@@ -279,7 +279,7 @@ def run_essay_mode():
     research_notes = ""
     selected_pdf = ""
     use_research = questionary.confirm(
-        "Use research material (PDF or cache)? [bold green]Highly recommended[/bold green] for deep, informed essays. (No = write from prompt only)",
+        "Use research material (PDF or cache)? Highly recommended for deep, informed essays. (No = write from prompt only)",
         default=True
     ).ask()
 
