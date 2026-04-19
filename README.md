@@ -8,7 +8,7 @@ This project was developed with the assistance of AI tools. While efforts have b
 > **Deep Research Tip**: Always combine Deep Research with a regular research cache for optimal output quality. You can use regular research alone, but avoid using only Deep Research without the cache.
 
 ## License
-This project is licensed under the MIT License for personal, non-commercial use. For organizational or commercial use, please contact [your email or contact info] to discuss licensing terms.
+This project is licensed under the MIT License for personal, non-commercial use. For organizational or commercial use.
 
 ## The Agentic Architecture
 This system utilizes a sophisticated pipeline of specialized agents, each with a distinct persona and mission, broken into specific modes of operation.
