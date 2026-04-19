@@ -314,6 +314,7 @@ def run_essay_mode():
 
     # --- Options ---
     use_thesis  = questionary.confirm("Generate & select a thesis statement?", default=False).ask()
+    use_enricher = questionary.confirm("Enable Enricher Mode? (Adds Lexicographer and Precisionist for enhanced vocabulary - takes longer)", default=False).ask()
 
     # --- Target Word Count ---
     target_words_str = questionary.text(
@@ -330,6 +331,7 @@ def run_essay_mode():
     console.print(f"  Source  : {selected_pdf or ('Cache' if research_notes else 'Prompt only')}")
     console.print(f"  Prompt  : {user_prompt}")
     console.print(f"  Thesis  : {'ON' if use_thesis else 'OFF'}")
+    console.print(f"  Enricher: {'ON' if use_enricher else 'OFF'}")
     console.print(f"  Length  : {f'~{target_words:,} words' if target_words else 'Natural Length'}")
 
     if not questionary.confirm("Start the engine?").ask():
@@ -342,7 +344,8 @@ def run_essay_mode():
         workflow = agent_writer.AgenticWorkflow(
             selected_pdf, user_prompt,
             extract_images=False,
-            preloaded_research=research_notes
+            preloaded_research=research_notes,
+            use_enricher=use_enricher
         )
         workflow.conduct_research()
 

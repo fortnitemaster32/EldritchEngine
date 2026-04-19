@@ -55,7 +55,7 @@ class AgenticWorkflow:
         raise FileNotFoundError(f"Missing prompt file: {path}")
 
     def __init__(self, pdf_path: str, user_prompt: str, extract_images: bool = False,
-                 preloaded_research: str = ""):
+                 preloaded_research: str = "", use_enricher: bool = False):
         self.pdf_path = pdf_path
         self.user_prompt = user_prompt
         self.log_dir = os.path.join(SCRIPT_DIR, "logs", f"work_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
@@ -69,6 +69,18 @@ class AgenticWorkflow:
         self.pdf_content = "\n".join(self.pdf_pages)
         # If pre-loaded research is provided (from cache), use it directly
         self.research_notes = preloaded_research
+        self.use_enricher = use_enricher
+
+        # Enricher agents (optional)
+        if use_enricher:
+            self.lexicographer = LMStudioAgent(
+                "The Lexicographer", "Vocabulary Curator",
+                self._load_prompt("lexicographer.md")
+            )
+            self.precisionist = LMStudioAgent(
+                "The Precisionist", "Synonym Specialist",
+                self._load_prompt("precisionist.md")
+            )
 
         # 0. The Scholar (Deep Research)
         self.scholar = LMStudioAgent(
@@ -282,6 +294,17 @@ class AgenticWorkflow:
             self._log_step("0_Architect_Plan", mission_brief)
             progress.remove_task(task_id_arch)
             
+            # Optional: Lexicographer for enhanced vocabulary
+            thesaurus = ""
+            if self.use_enricher and hasattr(self, 'lexicographer'):
+                task_id_lex = progress.add_task("[cyan]The Lexicographer is curating vocabulary...", total=None)
+                thesaurus = self.lexicographer.chat(
+                    f"Topic: {full_prompt}\n\nResearch Context:\n{self.research_notes[:50000]}\n\nCurate a thesaurus of ~200 sophisticated, topic-specific terms.",
+                    context=self.research_notes[:50000]
+                )
+                self._log_step("0.5_Lexicographer_Thesaurus", thesaurus)
+                progress.remove_task(task_id_lex)
+            
             console.print(Panel(Markdown(mission_brief), title="[bold cyan]Mission Brief[/bold cyan]", border_style="cyan"))
 
             # --- PHASE 2: WRITING (Parallel) ---
@@ -293,7 +316,8 @@ class AgenticWorkflow:
                     future = executor.submit(
                         writer.chat,
                         f"Mission Brief:\n{mission_brief}\n\nYour Persona: {self.writer_profiles[i]['prompt']}\n\nTask: Execute your assigned section."
-                        + (f"\n\nCRITICAL LENGTH REQUIREMENT: You MUST write exactly {target_word_count // 4} words. Expand your arguments thoroughly. Do not stop until you hit this length." if target_word_count > 0 else ""),
+                        + (f"\n\nCRITICAL LENGTH REQUIREMENT: You MUST write exactly {target_word_count // 4} words. Expand your arguments thoroughly. Do not stop until you hit this length." if target_word_count > 0 else "")
+                        + (f"\n\nENHANCED VOCABULARY THESAURUS:\n{thesaurus}" if thesaurus else ""),
                         self.research_notes[:100000]
                     )
                     writer_tasks.append((task_id, future, i+1))
@@ -308,6 +332,17 @@ class AgenticWorkflow:
             writer_outputs = [writer_outputs_map[i+1] for i in range(len(self.writers))]
             combined_draft = "\n\n".join(writer_outputs)
             self._log_step("2_Combined_Draft", combined_draft)
+            
+            # Optional: Precisionist for synonym suggestions
+            synonym_suggestions = ""
+            if self.use_enricher and hasattr(self, 'precisionist'):
+                task_id_prec = progress.add_task("[yellow]The Precisionist is suggesting synonyms...", total=None)
+                synonym_suggestions = self.precisionist.chat(
+                    f"Draft:\n{combined_draft}\n\nProvide synonym suggestions to enhance literary quality.",
+                    context=self.research_notes[:50000]
+                )
+                self._log_step("2.5_Precisionist_Suggestions", synonym_suggestions)
+                progress.remove_task(task_id_prec)
 
             # --- PHASE 3: REVIEW (Parallel) ---
             review_tasks = []
@@ -317,7 +352,7 @@ class AgenticWorkflow:
                     future = executor.submit(
                         reviewer.chat,
                         f"Mission Brief:\n{mission_brief}\n\nDraft:\n{combined_draft}",
-                        context=self.research_notes[:80000]
+                        context=self.research_notes[:80000] + (f"\n\nSYNONYM SUGGESTIONS:\n{synonym_suggestions}" if synonym_suggestions else "")
                     )
                     review_tasks.append((task_id, future, i+1))
                 
@@ -345,7 +380,9 @@ class AgenticWorkflow:
                 editor_prompt = (
                     f"### CURRENT DRAFT ###\n{current_content}\n\n"
                     f"### PEER REVIEWS ###\n{reviews[0]}\n\n{reviews[1]}\n\n"
-                    f"CRITICAL INSTRUCTION: You are the final editor. DO NOT write meta-commentary, greetings, or say 'I am prepared'. "
+                    + (f"### ENHANCED VOCABULARY THESAURUS ###\n{thesaurus}\n\n" if thesaurus else "")
+                    + (f"### SYNONYM SUGGESTIONS ###\n{synonym_suggestions}\n\n" if synonym_suggestions else "")
+                    + f"CRITICAL INSTRUCTION: You are the final editor. DO NOT write meta-commentary, greetings, or say 'I am prepared'. "
                     f"Your ONLY output must be the fully edited, final essay text itself. Execute the edits."
                     f"{thesis_instruction}"
                 )
