@@ -77,4 +77,3 @@ For best performance, I recommend using the **Gemma 4 E2B IT** model in LM Studi
 - **Parallel Processing**: Agents work in parallel to significantly reduce wait times.
 - **Rolling Context Windows**: Enables writing extremely long, coherent pieces without memory overflow.
 
----
