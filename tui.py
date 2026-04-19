@@ -723,11 +723,11 @@ def _build_workflow_tui(topic: str) -> dict | None:
 
 def _get_research_for_workflow(workflow_name: str) -> str:
     """Let user pick a PDF/cached research, or skip. Returns research text."""
-    cache_dir = "research_cache"
+    cache_dir = os.path.join(SCRIPT_DIR, "research_cache")
     os.makedirs(cache_dir, exist_ok=True)
     cached = [f for f in os.listdir(cache_dir) if f.endswith(".md")]
 
-    input_dir = "inputs"
+    input_dir = os.path.join(SCRIPT_DIR, "inputs")
     os.makedirs(input_dir, exist_ok=True)
     pdfs = [f for f in os.listdir(input_dir) if f.lower().endswith(".pdf")]
 
