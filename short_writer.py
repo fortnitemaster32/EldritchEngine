@@ -6,6 +6,7 @@ Accepts optional pre-loaded research notes (from cache) to skip the Scholar phas
 
 import os
 import math
+from concurrent.futures import ThreadPoolExecutor
 from openai import OpenAI
 from typing import List, Dict
 
@@ -95,6 +96,46 @@ class ShortWriterWorkflow:
             return f"### RESEARCH NOTES ###\n{self.research_notes[:max_chars]}"
         return ""
 
+    def _measure_word_count(self, text: str) -> int:
+        return len(text.split())
+
+    def _generate_additional_section(
+        self,
+        outline: str,
+        writer_agent,
+        writer_type: str,
+        written_sections: List[str],
+        remaining_words: int,
+    ) -> str:
+        if remaining_words <= 50:
+            return ""
+
+        console.print(
+            f"\n[bold cyan]{writer_agent.name} is adding a bridging continuation to reach the target length ({remaining_words} more words)...[/bold cyan]"
+        )
+
+        all_so_far = "\n\n".join(written_sections)
+        last_words = all_so_far.split()[-ROLLING_WORD_WINDOW:]
+        rolling = " ".join(last_words)
+
+        prompt = (
+            f"FULL OUTLINE:\n{outline}\n\n"
+            + (
+                f"ALREADY WRITTEN (continue seamlessly from the last word):\n"
+                f"...{rolling}\n\n"
+            )
+            + f"TASK: Continue the piece, adding approximately {remaining_words} words to move the draft toward the target length. "
+            "Begin with a natural transitional sentence that bridges from the previous section into this one. "
+            "This is the FINAL section — bring the piece to a strong, decisive close without repeating or restating already written text. "
+            "Do NOT trail off or add meta-commentary."
+        )
+
+        continuation_text = writer_agent.chat(
+            prompt,
+            context=self._research_context(max_chars=30000)
+        )
+        return continuation_text
+
     # ------------------------------------------------------------------
     # Phase 1 — Planning
     # ------------------------------------------------------------------
@@ -124,7 +165,7 @@ class ShortWriterWorkflow:
     def _generate_draft(self, outline: str, writer_agent, writer_type: str) -> str:
         """Generate a complete draft using the given writer agent."""
         num_sections = max(2, math.ceil(self.target_words / WORDS_PER_SECTION))
-        words_per_section = self.target_words // num_sections
+        words_per_section = math.ceil(self.target_words / num_sections)
         written_sections: List[str] = []
 
         console.print(
@@ -192,6 +233,16 @@ class ShortWriterWorkflow:
                 )
 
         full_draft = "\n\n".join(written_sections)
+        total_words = self._measure_word_count(full_draft)
+        if total_words < self.target_words:
+            remaining = self.target_words - total_words
+            continuation = self._generate_additional_section(
+                outline, writer_agent, writer_type, written_sections, remaining
+            )
+            if continuation.strip():
+                written_sections.append(continuation)
+                full_draft = "\n\n".join(written_sections)
+
         return full_draft
 
     def write(self, outline: str) -> tuple[str, str]:
@@ -199,13 +250,21 @@ class ShortWriterWorkflow:
         console.print(
             f"\n[bold yellow]Two Writers are now composing in parallel...[/bold yellow]"
         )
-        
-        creative_draft = self._generate_draft(outline, self.writer_creative, "creative")
-        self._log_step("1_CreativeDraft", creative_draft)
-        
-        logical_draft = self._generate_draft(outline, self.writer_logical, "logical")
-        self._log_step("1_LogicalDraft", logical_draft)
-        
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            creative_future = executor.submit(
+                self._generate_draft, outline, self.writer_creative, "creative"
+            )
+            logical_future = executor.submit(
+                self._generate_draft, outline, self.writer_logical, "logical"
+            )
+
+            creative_draft = creative_future.result()
+            self._log_step("1_CreativeDraft", creative_draft)
+
+            logical_draft = logical_future.result()
+            self._log_step("1_LogicalDraft", logical_draft)
+
         return creative_draft, logical_draft
 
     # ------------------------------------------------------------------
@@ -226,7 +285,7 @@ class ShortWriterWorkflow:
                     "Keep the strongest imagery, emotional momentum, and bold turns of phrase from the Creative Writer. "
                     "Maintain the clarity, logical flow, and structural integrity from the Logical Writer. "
                     "Fix transitions, sharpen the opening and closing, eliminate redundancy. "
-                    "Do NOT significantly shorten the piece."
+                    "Do NOT significantly shorten the piece. Preserve the target length and richness; if you make edits, keep the final output near the requested word count rather than cutting it dramatically."
                 ),
                 context=f"Genre: {self.genre} | Target: ~{self.target_words} words\n{self._research_context(max_chars=30000)}"
             )

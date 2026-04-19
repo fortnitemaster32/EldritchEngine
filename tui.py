@@ -5,6 +5,7 @@ Modes:
   📝  Essay Mode      — Full multi-agent essay pipeline (agent_writer.py)
   🔄  Iterative Mode  — Plan and write paragraph-by-paragraph with live review
   ✍️   Short Mode      — Lean 3-agent short-form pipeline (short_writer.py)
+  📖  Book Mode       — Extensive planning → Page-by-page iterative book writing
 """
 
 import os
@@ -24,6 +25,7 @@ import iterative_writer
 import deep_research_mode
 import modular_writer
 import research_cache
+import book_writer
 
 console = Console()
 
@@ -124,6 +126,21 @@ def pick_cache() -> str:
         combined_notes.append(header + data["research_notes"])
         
     return "\n\n---\n\n".join(combined_notes)
+
+
+def _find_resume_book_sessions() -> list[str]:
+    sessions = []
+    logs_dir = os.path.join(SCRIPT_DIR, "logs")
+    if not os.path.isdir(logs_dir):
+        return sessions
+
+    for name in sorted(os.listdir(logs_dir), reverse=True):
+        path = os.path.join(logs_dir, name)
+        if not os.path.isdir(path):
+            continue
+        if name.startswith("book_") and os.path.exists(os.path.join(path, "state.json")):
+            sessions.append(path)
+    return sessions
 
 
 # ---------------------------------------------------------------------------
@@ -832,6 +849,140 @@ def run_custom_mode():
     wf.run()
 
 
+# ---------------------------------------------------------------------------
+# Mode: Book Writing
+# ---------------------------------------------------------------------------
+
+def run_book_mode():
+    console.print(Panel.fit(
+        "📖  [bold gold1]Book Writing Mode[/bold gold1]\n"
+        "[dim]Extensive planning → Page-by-page iterative drafting with context condensation[/dim]",
+        border_style="gold1"
+    ))
+
+    resume_sessions = _find_resume_book_sessions()
+    if resume_sessions:
+        resume_choice = questionary.confirm(
+            "Resume an existing book session?",
+            default=False
+        ).ask()
+        if resume_choice:
+            selected = questionary.select(
+                "Choose a session to resume:",
+                choices=[
+                    questionary.Choice(title=os.path.basename(path), value=path)
+                    for path in resume_sessions
+                ]
+            ).ask()
+            if selected:
+                try:
+                    wf = book_writer.BookWriterWorkflow(resume_dir=selected)
+                    wf.run()
+                except Exception as exc:
+                    console.print(f"\n[bold red]ERROR:[/bold red] {exc}")
+                    raise
+                return
+
+    # --- Research source ---
+    research_notes = ""
+    use_cache = questionary.confirm(
+        "Use cached research as source material? (No = write from prompt only)",
+        default=False
+    ).ask()
+    if use_cache:
+        research_notes = pick_cache()
+
+    # --- Prompt ---
+    user_prompt = questionary.text(
+        "What book do you want to write?",
+        instruction="e.g. 'Write a fantasy novel about a young wizard discovering ancient magic'"
+    ).ask()
+    if not user_prompt:
+        return
+
+    # --- Style selection ---
+    style_choice = questionary.select(
+        "Choose a style and atmosphere for your book:",
+        choices=[
+            "Fantasy",
+            "Science Fiction",
+            "Mystery/Thriller",
+            "Literary Fiction",
+            "Romance",
+            "Horror",
+            "Historical",
+            "Other (custom)"
+        ]
+    ).ask()
+    if style_choice == "Other (custom)":
+        style_choice = questionary.text(
+            "Describe the tone, style, and atmosphere you want:",
+            instruction="e.g. 'Dark, cinematic epic fantasy with lyrical prose'"
+        ).ask() or "Custom"
+
+    # --- Book title ---
+    title_choice = questionary.select(
+        "Would you like to name the book or have AI generate the title?",
+        choices=[
+            "Enter title myself",
+            "AI generate title"
+        ]
+    ).ask()
+
+    book_title = ""
+    if title_choice == "Enter title myself":
+        book_title = questionary.text("Enter your book title:").ask() or "Untitled Book"
+    else:
+        title_agent = book_writer.LMStudioAgent(
+            "Title Generator", "Book Title Generator",
+            "You are a creative book title generator. Given a book idea and style, suggest five strong and memorable book titles. Output only a numbered list of titles, no explanation."
+        )
+        title_prompt = (
+            f"Book idea: {user_prompt}\n"
+            f"Style: {style_choice}\n\n"
+            "Suggest five compelling book titles in a numbered list. Output only the titles."
+        )
+        response = title_agent.chat(title_prompt, context=research_notes[:20000])
+        lines = [line.strip() for line in response.splitlines() if line.strip()]
+        suggestions = []
+        for line in lines:
+            if line[0].isdigit() and "." in line:
+                suggestions.append(line.split(".", 1)[1].strip())
+            else:
+                suggestions.append(line)
+        generated_title = suggestions[0] if suggestions else "Untitled Book"
+        book_title = questionary.text(
+            f"AI generated title suggestion: {generated_title}\nEnter your title or press Enter to keep this:",
+            default=generated_title
+        ).ask() or generated_title
+
+    # --- Summary ---
+    console.print("\n[bold gold1]Project Summary:[/bold gold1]")
+    console.print(f"  Title   : {book_title}")
+    console.print(f"  Style   : {style_choice}")
+    console.print(f"  Prompt  : {user_prompt}")
+    console.print(f"  Research: {'Cache loaded' if research_notes else 'None (prompt only)'}")
+
+    # --- Auto-accept mode ---
+    auto_accept = questionary.confirm(
+        "Enable auto-accept mode? (Automatically accept drafts and continue without prompts)",
+        default=False
+    ).ask()
+
+    if not questionary.confirm("Start book writing? (This will be iterative and may take time)").ask():
+        return
+
+    clear_screen()
+    console.print("[bold gold1]Book Writing Starting...[/bold gold1]\n")
+
+    try:
+        wf = book_writer.BookWriterWorkflow(user_prompt, research_notes, book_title=book_title, book_style=style_choice, auto_accept=auto_accept)
+        wf.run()
+    except Exception as exc:
+        console.print(f"\n[bold red]ERROR:[/bold red] {exc}")
+        raise
+
+
 def main():
     while True:
         clear_screen()
@@ -861,8 +1012,8 @@ def main():
                     value="short"
                 ),
                 questionary.Choice(
-                    title="🛠️   Custom Workflow  — Run your own modular agent pipelines",
-                    value="custom"
+                    title="�  Book Writing     — Extensive planning → Page-by-page iterative drafting",
+                    value="book"
                 ),
             ]
         ).ask()
@@ -885,6 +1036,8 @@ def main():
             run_short_mode()
         elif mode == "custom":
             run_custom_mode()
+        elif mode == "book":
+            run_book_mode()
 
         console.print("\n[bold green]✓ Mode completed![/bold green]")
 
