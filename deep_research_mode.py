@@ -197,7 +197,7 @@ class DeepResearchWorkflow:
         # Save output
         os.makedirs(os.path.join(SCRIPT_DIR, "outputs"), exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_file = os.path.join("outputs", f"deep_research_paper_{timestamp}.md")
+        output_file = os.path.join(SCRIPT_DIR, "outputs", f"deep_research_paper_{timestamp}.md")
         with open(output_file, "w", encoding="utf-8") as fh:
             fh.write(final_paper)
             

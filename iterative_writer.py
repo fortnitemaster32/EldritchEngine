@@ -20,7 +20,7 @@ class IterativeWriterWorkflow:
         
         os.makedirs(os.path.join(SCRIPT_DIR, "outputs"), exist_ok=True)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        self.output_file = os.path.join("outputs", f"iterative_draft_{timestamp}.md")
+        self.output_file = os.path.join(SCRIPT_DIR, "outputs", f"iterative_draft_{timestamp}.md")
         
         self.planner = LMStudioAgent(
             "The Planner", "Essay Architect",

@@ -274,7 +274,7 @@ class ModularWorkflow:
         # ── Save output ───────────────────────────────────────────────────────
         os.makedirs(os.path.join(SCRIPT_DIR, "outputs"), exist_ok=True)
         ts   = datetime.now().strftime('%Y%m%d_%H%M%S')
-        path = os.path.join("outputs", f"modular_{ts}.md")
+        path = os.path.join(SCRIPT_DIR, "outputs", f"modular_{ts}.md")
         with open(path, "w", encoding="utf-8") as f:
             f.write(current_state)
             if pinned:

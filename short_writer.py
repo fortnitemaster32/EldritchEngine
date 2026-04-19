@@ -236,7 +236,7 @@ class ShortWriterWorkflow:
         # Save output
         os.makedirs(os.path.join(SCRIPT_DIR, "outputs"), exist_ok=True)
         timestamp   = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_file = os.path.join("outputs", f"short_work_{timestamp}.md")
+        output_file = os.path.join(SCRIPT_DIR, "outputs", f"short_work_{timestamp}.md")
         with open(output_file, "w", encoding="utf-8") as fh:
             fh.write(final)
 
