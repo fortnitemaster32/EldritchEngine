@@ -267,7 +267,13 @@ Output in clean Markdown format.
             border_style="gold1"
         ))
 
-        topic_plan_prompt = f"""
+        detailed_plan_path = os.path.join(self.log_dir, "1_Detailed_Topics.md")
+        if os.path.exists(detailed_plan_path):
+            console.print(f"[cyan]Loading existing detailed plan from {detailed_plan_path}[/cyan]")
+            with open(detailed_plan_path, "r", encoding="utf-8") as f:
+                detailed_plan = f.read()
+        else:
+            topic_plan_prompt = f"""
 Initial Outline:
 {outline}
 
@@ -293,10 +299,10 @@ Ensure the topics flow logically across chapters and cover all aspects of the bo
 Output in clean Markdown format.
 """
 
-        with console.status("[cyan]The Strategist is creating detailed topics and pages...[/cyan]"):
-            detailed_plan = self.strategist.chat(topic_plan_prompt, context=self.research_notes[:50000])
+            with console.status("[cyan]The Strategist is creating detailed topics and pages...[/cyan]"):
+                detailed_plan = self.strategist.chat(topic_plan_prompt, context=self.research_notes[:50000])
 
-        self._log("1_Detailed_Topics.md", detailed_plan)
+            self._log("1_Detailed_Topics.md", detailed_plan)
 
         console.print(Panel(Markdown(detailed_plan), title="Detailed Topic Plan", border_style="cyan"))
 
