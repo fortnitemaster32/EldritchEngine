@@ -61,9 +61,13 @@ class ShortWriterWorkflow:
             "The Planner", "Structural Planner",
             self._load_prompt("short_planner.md")
         )
-        self.writer = LMStudioAgent(
-            "The Writer", "Prose Writer",
-            self._load_prompt("short_writer.md")
+        self.writer_creative = LMStudioAgent(
+            "The Creative Writer", "Imaginative Storyteller",
+            self._load_prompt("short_writer_creative.md")
+        )
+        self.writer_logical = LMStudioAgent(
+            "The Logical Writer", "Structured Prose Specialist",
+            self._load_prompt("short_writer_logical.md")
         )
         self.editor = LMStudioAgent(
             "The Editor", "Final Polisher",
@@ -114,17 +118,18 @@ class ShortWriterWorkflow:
         return outline
 
     # ------------------------------------------------------------------
-    # Phase 2 — Rolling-window writing loop
+    # Phase 2 — Parallel dual-writer composition
     # ------------------------------------------------------------------
 
-    def write(self, outline: str) -> str:
+    def _generate_draft(self, outline: str, writer_agent, writer_type: str) -> str:
+        """Generate a complete draft using the given writer agent."""
         num_sections = max(2, math.ceil(self.target_words / WORDS_PER_SECTION))
         words_per_section = self.target_words // num_sections
         written_sections: List[str] = []
 
         console.print(
-            f"\n[bold cyan]The Writer is composing "
-            f"{num_sections} sections (~{words_per_section} words each)...[/bold cyan]"
+            f"\n[bold cyan]The {writer_agent.name} is composing "
+            f"{num_sections} sections (~{words_per_section} words each) [{writer_type}]...[/bold cyan]"
         )
 
         with Progress(
@@ -134,7 +139,7 @@ class ShortWriterWorkflow:
             TaskProgressColumn(),
             console=console
         ) as prog:
-            task = prog.add_task("Writing section 1 ...", total=num_sections)
+            task = prog.add_task(f"Writing section 1 ({writer_type})...", total=num_sections)
 
             for i in range(num_sections):
                 is_first = i == 0
@@ -171,7 +176,7 @@ class ShortWriterWorkflow:
                     )
                 )
 
-                section_text = self.writer.chat(
+                section_text = writer_agent.chat(
                     prompt,
                     context=self._research_context(max_chars=30000)
                 )
@@ -181,33 +186,49 @@ class ShortWriterWorkflow:
                     task,
                     advance=1,
                     description=(
-                        f"Writing section {i + 2} of {num_sections}..."
-                        if not is_last else "Writing complete ✓"
+                        f"Writing section {i + 2} of {num_sections} ({writer_type})..."
+                        if not is_last else f"Writing complete ✓ ({writer_type})"
                     )
                 )
 
         full_draft = "\n\n".join(written_sections)
-        self._log_step("1_Draft", full_draft)
         return full_draft
 
+    def write(self, outline: str) -> tuple[str, str]:
+        """Generate two parallel drafts: one creative, one logical."""
+        console.print(
+            f"\n[bold yellow]Two Writers are now composing in parallel...[/bold yellow]"
+        )
+        
+        creative_draft = self._generate_draft(outline, self.writer_creative, "creative")
+        self._log_step("1_CreativeDraft", creative_draft)
+        
+        logical_draft = self._generate_draft(outline, self.writer_logical, "logical")
+        self._log_step("1_LogicalDraft", logical_draft)
+        
+        return creative_draft, logical_draft
+
     # ------------------------------------------------------------------
-    # Phase 3 — Final edit
+    # Phase 3 — Merge & polish
     # ------------------------------------------------------------------
 
-    def edit(self, draft: str, outline: str) -> str:
-        console.print("\n[bold magenta]The Editor is polishing the final piece...[/bold magenta]")
+    def edit(self, creative_draft: str, logical_draft: str, outline: str) -> str:
+        console.print("\n[bold magenta]The Editor is merging and polishing...[/bold magenta]")
         with Progress(SpinnerColumn(), TextColumn("{task.description}"),
                       console=console) as prog:
             prog.add_task("[magenta]Editing...", total=None)
             final = self.editor.chat(
                 (
                     f"ORIGINAL OUTLINE:\n{outline}\n\n"
-                    f"FULL DRAFT:\n{draft}\n\n"
-                    "Task: Polish this into a final, publication-ready piece. "
-                    "Fix transitions, sharpen the opening and closing, eliminate "
-                    "redundancy. Do NOT significantly shorten the piece."
+                    f"CREATIVE DRAFT:\n{creative_draft}\n\n"
+                    f"LOGICAL DRAFT:\n{logical_draft}\n\n"
+                    "Task: Merge the best parts of both drafts into one final, publication-ready piece. "
+                    "Keep the strongest imagery, emotional momentum, and bold turns of phrase from the Creative Writer. "
+                    "Maintain the clarity, logical flow, and structural integrity from the Logical Writer. "
+                    "Fix transitions, sharpen the opening and closing, eliminate redundancy. "
+                    "Do NOT significantly shorten the piece."
                 ),
-                context=f"Genre: {self.genre} | Target: ~{self.target_words} words"
+                context=f"Genre: {self.genre} | Target: ~{self.target_words} words\n{self._research_context(max_chars=30000)}"
             )
         self._log_step("2_Final", final)
         return final
@@ -230,8 +251,8 @@ class ShortWriterWorkflow:
             border_style="cyan"
         ))
 
-        draft  = self.write(outline)
-        final  = self.edit(draft, outline)
+        creative_draft, logical_draft = self.write(outline)
+        final = self.edit(creative_draft, logical_draft, outline)
 
         # Save output
         os.makedirs(os.path.join(SCRIPT_DIR, "outputs"), exist_ok=True)

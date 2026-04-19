@@ -406,7 +406,7 @@ class AgenticWorkflow:
         # FINAL OUTPUT (Unique Filename)
         os.makedirs(os.path.join(SCRIPT_DIR, "outputs"), exist_ok=True)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        output_file = os.path.join("outputs", f"final_written_work_{timestamp}.md")
+        output_file = os.path.join(SCRIPT_DIR, "outputs", f"final_written_work_{timestamp}.md")
         with open(output_file, "w", encoding="utf-8") as f:
             f.write(current_content)
 
