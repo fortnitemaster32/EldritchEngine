@@ -78,4 +78,3 @@ For best performance, I recommend using the **Gemma 4 E2B IT** model in LM Studi
 - **Rolling Context Windows**: Enables writing extremely long, coherent pieces without memory overflow.
 
 ---
-*Built for depth. Engineered for precision.*
