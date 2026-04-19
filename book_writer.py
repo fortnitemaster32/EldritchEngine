@@ -72,6 +72,10 @@ class BookWriterWorkflow:
             "The Architect", "Book Planner",
             self._load_prompt("architect.md")  # Reuse architect prompt, enhance for books
         )
+        self.strategist = LMStudioAgent(
+            "The Strategist", "Topic and Chapter Organizer",
+            self._load_prompt("strategist.md")
+        )
         self.writer_a = LMStudioAgent(
             "Writer Alpha", "Page Drafter A",
             self._load_prompt("iterative_writer_alpha.md")
@@ -257,7 +261,53 @@ Output in clean Markdown format.
             with open(os.path.join(self.log_dir, "0_Book_Outline.md"), "r", encoding="utf-8") as f:
                 outline = f.read()
 
-        chapters = self._parse_outline(outline)
+        # Phase 2: Detailed Topic Planning
+        console.print(Panel.fit(
+            "📝 [bold gold1]Phase 2: Detailed Topic and Page Planning[/bold gold1]",
+            border_style="gold1"
+        ))
+
+        topic_plan_prompt = f"""
+Initial Outline:
+{outline}
+
+Task: Based on the initial outline, create a detailed plan with 20-40 unique, non-repetitive topics that cover the entire book comprehensively. Ensure topics are diverse and avoid redundancy.
+
+For each topic:
+- Provide a brief description
+- Create 2-3 specific page descriptions (each page ~500-800 words) that develop this topic
+
+Then, group these topics into 10-15 logical chapters. Each chapter should contain 3-6 topics, resulting in 6-18 pages per chapter.
+
+Structure the output as:
+
+**Chapter 1: [Title]**
+- **Topic 1: [Title]**
+  - Page 1: [Detailed description of content]
+  - Page 2: [Detailed description]
+  - Page 3: [If needed]
+- **Topic 2: [Title]**
+  - etc.
+
+Ensure the topics flow logically across chapters and cover all aspects of the book without repetition.
+Output in clean Markdown format.
+"""
+
+        with console.status("[cyan]The Strategist is creating detailed topics and pages...[/cyan]"):
+            detailed_plan = self.strategist.chat(topic_plan_prompt, context=self.research_notes[:50000])
+
+        self._log("1_Detailed_Topics.md", detailed_plan)
+
+        console.print(Panel(Markdown(detailed_plan), title="Detailed Topic Plan", border_style="cyan"))
+
+        if questionary.confirm("Edit the detailed plan manually?", default=False).ask():
+            console.print(f"Detailed plan saved to: {os.path.join(self.log_dir, '1_Detailed_Topics.md')}")
+            console.print("Edit the file manually, then press Enter to continue.")
+            input("Press Enter when done editing...")
+            with open(os.path.join(self.log_dir, "1_Detailed_Topics.md"), "r", encoding="utf-8") as f:
+                detailed_plan = f.read()
+
+        chapters = self._parse_detailed_plan(detailed_plan)
         self.chapters = chapters
         if not self.book_summary:
             self.book_summary = self._summarize_text(outline[:12000], sentences=3)
@@ -274,7 +324,35 @@ Output in clean Markdown format.
         self.save_state()
         return chapters
 
-    def _parse_outline(self, outline: str) -> list:
+    def _parse_detailed_plan(self, plan: str) -> list:
+        """Extract chapters and pages from the detailed topic plan."""
+        chapters = []
+        current_chapter = None
+        current_pages = []
+        chapter_pattern = re.compile(r'\*\*Chapter\s*\d+:', re.IGNORECASE)
+        page_pattern = re.compile(r'-\s*Page\s*\d+:', re.IGNORECASE)
+
+        for line in plan.splitlines():
+            stripped = line.strip()
+            if not stripped:
+                continue
+
+            if chapter_pattern.search(stripped):
+                if current_chapter:
+                    chapters.append({"title": current_chapter, "pages": current_pages})
+                current_chapter = stripped.replace('**', '').strip()
+                current_pages = []
+                continue
+
+            if current_chapter and page_pattern.search(stripped):
+                # Extract the page description after the colon
+                page_desc = stripped.split(':', 1)[1].strip() if ':' in stripped else stripped
+                current_pages.append(page_desc)
+
+        if current_chapter:
+            chapters.append({"title": current_chapter, "pages": current_pages})
+
+        return chapters
         """Extract chapters and pages from the outline."""
         chapters = []
         current_chapter = None
