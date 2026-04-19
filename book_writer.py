@@ -246,10 +246,16 @@ Be exhaustive in detail. Each chapter should have 5-15 pages, each page describe
 Output in clean Markdown format.
 """
 
-        with console.status("[cyan]The Architect is planning the entire book...[/cyan]"):
-            outline = self.planner.chat(plan_prompt, context=self.research_notes[:50000])
+        outline_path = os.path.join(self.log_dir, "0_Book_Outline.md")
+        if os.path.exists(outline_path):
+            console.print(f"[cyan]Loading existing outline from {outline_path}[/cyan]")
+            with open(outline_path, "r", encoding="utf-8") as f:
+                outline = f.read()
+        else:
+            with console.status("[cyan]The Architect is planning the entire book...[/cyan]"):
+                outline = self.planner.chat(plan_prompt, context=self.research_notes[:50000])
 
-        self._log("0_Book_Outline.md", outline)
+            self._log("0_Book_Outline.md", outline)
 
         # Parse outline to extract structure
         console.print(Panel(Markdown(outline), title="Book Outline", border_style="cyan"))
