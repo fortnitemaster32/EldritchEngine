@@ -1,6 +1,6 @@
 # EldritchEngine
 
-The ultimate multi-agent AI writing system powered by **LM Studio**. Transform PDFs and images into professional, high-impact literature using a coordinated team of specialized AI agents.
+The ultimate multi-agent AI writing system powered by [**LM Studio**](https://lmstudio.ai/). Transform PDFs and images into professional, high-impact literature using a coordinated team of specialized AI agents.
 
 ## Disclaimer
 This project was developed with the assistance of AI tools. While efforts have been made to ensure quality and accuracy, please review and verify all outputs before use.
