@@ -25,6 +25,10 @@ A comprehensive 4-phase pipeline for deep, complex topics:
 3. **The Reviewers**: Auditor (Logic/Accuracy) and Stylist (Tone/Flow) perform parallel in-depth critiques.
 4. **The Editors**: Sculptor (Structure) and Finisher (Final Polish) create the definitive version through sequential editing passes.
 
+**Enricher Mode** (Optional): Adds two additional agents for enhanced literary quality:
+- **The Lexicographer**: Curates a thesaurus of ~200 sophisticated, topic-specific terms provided as context to writers and editors.
+- **The Precisionist**: Suggests synonym replacements for key words/phrases, provided as guidance to reviewers and editors (without rewriting the draft).
+
 ### Iterative Mode
 This mode provides a structured, iterative approach to writing. First, a planner agent generates a detailed outline based on your topic. Then, the writing process proceeds paragraph by paragraph: each paragraph is drafted by a writer agent, reviewed by a critic for improvements, and edited if necessary. This allows for live feedback and revisions at each step, ensuring high precision and quality control throughout the composition.
 
