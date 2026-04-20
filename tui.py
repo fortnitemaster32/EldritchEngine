@@ -274,13 +274,16 @@ def run_deep_research_mode():
         console.print("[bold gold1]Assembling the Scholars...[/bold gold1]\n")
 
         try:
+            # Pass 1: Deep Research (The PhD Protocol)
             wf = deep_research_mode.DeepResearchWorkflow(pdf, research_prompt)
             wf.run()
             
-            console.print(f"\n[bold gold1]Starting Standard Research for {pdf}...[/bold gold1]")
+            # Pass 2: Standard Research (The Fact-Caching Protocol)
+            console.print(f"\n[bold gold1]Starting Standard Factual Research for {pdf}...[/bold gold1]")
             regular_wf = agent_writer.AgenticWorkflow(pdf, research_prompt, extract_images=comics_mode)
             regular_wf.conduct_research()
             
+            # Finalizing both
             if regular_wf.research_notes:
                 source_name = os.path.basename(pdf)
                 cache_id = research_cache.save_research(
@@ -289,9 +292,16 @@ def run_deep_research_mode():
                     research_notes=regular_wf.research_notes,
                     page_count=len(regular_wf.pdf_pages),
                 )
+                
+                # Also log the standard research to the same log dir for convenience
+                standard_log_path = os.path.join(wf.log_dir, "4_Standard_Research_Notes.md")
+                with open(standard_log_path, "w", encoding="utf-8") as f:
+                    f.write(f"# Standard Research Notes: {pdf}\n\n" + regular_wf.research_notes)
+
                 console.print(Panel.fit(
-                    f"✅ [bold green]Research for {pdf} saved to cache![/bold green]\n\n"
-                    f"Cache ID : [bold]{cache_id}[/bold]",
+                    f"✅ [bold green]Dual-Pass Research for {pdf} Complete![/bold green]\n\n"
+                    f"1. Deep Synthesis:  [cyan]Saved in logs[/cyan]\n"
+                    f"2. Factual Cache:   [cyan]{cache_id}[/cyan]",
                     border_style="green"
                 ))
 
