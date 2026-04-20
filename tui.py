@@ -18,6 +18,7 @@ from rich.panel   import Panel
 from rich.table   import Table
 from rich.text    import Text
 from datetime     import datetime
+import subprocess
 
 import agent_writer
 import short_writer
@@ -215,6 +216,18 @@ def run_research_mode():
 # Mode: Deep Research (Parallel PhDs)
 # ---------------------------------------------------------------------------
 
+def _git_commit(message):
+    """Internal helper to commit changes."""
+    try:
+        subprocess.run(["git", "add", "."], cwd=SCRIPT_DIR, check=True, capture_output=True)
+        status = subprocess.run(["git", "status", "--porcelain"], cwd=SCRIPT_DIR, check=True, capture_output=True, text=True)
+        if not status.stdout.strip():
+            return "No changes to commit."
+        subprocess.run(["git", "commit", "-m", message], cwd=SCRIPT_DIR, check=True, capture_output=True)
+        return f"Committed: {message}"
+    except Exception as e:
+        return f"Git Error: {str(e)}"
+
 def run_deep_research_mode():
     console.print(Panel.fit(
         "🏛️   [bold gold1]Deep Research Mode[/bold gold1]\n"
@@ -228,11 +241,11 @@ def run_deep_research_mode():
         console.print("[red]No PDFs found in the inputs/ folder.[/red]")
         return
 
-    selected_pdf = questionary.select(
-        "Select a PDF to research:",
+    selected_pdfs = questionary.checkbox(
+        "Select PDF(s) to research (Multi-select enabled for overnight runs):",
         choices=pdfs
     ).ask()
-    if not selected_pdf:
+    if not selected_pdfs:
         return
 
     research_prompt = questionary.text(
@@ -243,44 +256,52 @@ def run_deep_research_mode():
 
     comics_mode = questionary.confirm("Enable Comics Mode? (Extract images during standard research)", default=False).ask()
 
-    console.print(f"\n[bold]PDF:[/bold] {selected_pdf}")
+    console.print(f"\n[bold]Selected PDFs ({len(selected_pdfs)}):[/bold] {', '.join(selected_pdfs)}")
     console.print(f"[bold]Prompt:[/bold] {research_prompt}")
     console.print(f"[bold]Comics Mode:[/bold] {'ON' if comics_mode else 'OFF'}")
 
-    confirm = questionary.confirm("Start the Deep Research Protocol? (This will take a while)").ask()
+    confirm = questionary.confirm("Start the Batch Deep Research Protocol?").ask()
     if not confirm:
         return
 
-    clear_screen()
-    console.print("[bold gold1]Assembling the Scholars...[/bold gold1]\n")
+    # --- Git: Pre-Research Snapshot ---
+    git_msg_pre = f"Pre-research snapshot: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    console.print(f"[dim]{_git_commit(git_msg_pre)}[/dim]")
 
-    try:
-        wf = deep_research_mode.DeepResearchWorkflow(selected_pdf, research_prompt)
-        wf.run()
-        
-        console.print("\n[bold gold1]Starting Standard Research Protocol...[/bold gold1]")
-        regular_wf = agent_writer.AgenticWorkflow(selected_pdf, research_prompt, extract_images=comics_mode)
-        regular_wf.conduct_research()
-        
-        if regular_wf.research_notes:
-            source_name = os.path.basename(selected_pdf)
-            cache_id = research_cache.save_research(
-                source_name=source_name,
-                prompt=research_prompt,
-                research_notes=regular_wf.research_notes,
-                page_count=len(regular_wf.pdf_pages),
-            )
-            console.print(Panel.fit(
-                f"✅ [bold green]Standard Research saved to cache![/bold green]\n\n"
-                f"Cache ID : [bold]{cache_id}[/bold]\n"
-                f"Words    : [bold]{len(regular_wf.research_notes.split()):,}[/bold]\n"
-                f"Pages    : [bold]{len(regular_wf.pdf_pages)}[/bold]",
-                border_style="green"
-            ))
+    for pdf in selected_pdfs:
+        clear_screen()
+        console.print(Panel.fit(f"🚀 [bold gold1]Processing: {pdf}[/bold gold1]", border_style="gold1"))
+        console.print("[bold gold1]Assembling the Scholars...[/bold gold1]\n")
 
-    except Exception as exc:
-        console.print(f"\n[bold red]ERROR:[/bold red] {exc}")
-        raise
+        try:
+            wf = deep_research_mode.DeepResearchWorkflow(pdf, research_prompt)
+            wf.run()
+            
+            console.print(f"\n[bold gold1]Starting Standard Research for {pdf}...[/bold gold1]")
+            regular_wf = agent_writer.AgenticWorkflow(pdf, research_prompt, extract_images=comics_mode)
+            regular_wf.conduct_research()
+            
+            if regular_wf.research_notes:
+                source_name = os.path.basename(pdf)
+                cache_id = research_cache.save_research(
+                    source_name=source_name,
+                    prompt=research_prompt,
+                    research_notes=regular_wf.research_notes,
+                    page_count=len(regular_wf.pdf_pages),
+                )
+                console.print(Panel.fit(
+                    f"✅ [bold green]Research for {pdf} saved to cache![/bold green]\n\n"
+                    f"Cache ID : [bold]{cache_id}[/bold]",
+                    border_style="green"
+                ))
+
+        except Exception as exc:
+            console.print(f"\n[bold red]ERROR processing {pdf}:[/bold red] {exc}")
+            continue # Move to next PDF in batch
+
+    # --- Git: Post-Research Snapshot ---
+    git_msg_post = f"Post-research batch complete: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    console.print(f"\n[dim]{_git_commit(git_msg_post)}[/dim]")
 
 # ---------------------------------------------------------------------------
 # Mode: Essay
@@ -624,6 +645,16 @@ def _save_workflow(config: dict) -> str:
     return save_path
 
 
+def pick_font_theme() -> str:
+    from pdf_exporter import FONT_THEMES
+    themes = list(FONT_THEMES.keys())
+    return questionary.select(
+        "Select a font theme for the PDF:",
+        choices=themes,
+        default="Modern Sans"
+    ).ask() or "Modern Sans"
+
+
 def _offer_pdf_export(result: dict | None):
     if not result:
         return
@@ -631,12 +662,14 @@ def _offer_pdf_export(result: dict | None):
     if not questionary.confirm("Export finished writing output to PDF?", default=True).ask():
         return
 
+    font_theme = pick_font_theme()
+    
     os.makedirs(os.path.join(SCRIPT_DIR, "outputs"), exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     if result.get("type") == "book":
         output_pdf = os.path.join(SCRIPT_DIR, "outputs", f"book_export_{timestamp}.pdf")
         try:
-            export_book_dir_to_pdf(result["log_dir"], result.get("title", "Untitled Book"), output_pdf)
+            export_book_dir_to_pdf(result["log_dir"], result.get("title", "Untitled Book"), output_pdf, font_theme=font_theme)
             console.print(Panel.fit(f"✅ [bold green]Book exported to PDF:[/bold green]\n{output_pdf}", border_style="green"))
         except Exception as exc:
             console.print(f"[bold red]PDF export failed:[/bold red] {exc}")
@@ -647,7 +680,7 @@ def _offer_pdf_export(result: dict | None):
             return
         output_pdf = os.path.join(SCRIPT_DIR, "outputs", f"text_export_{timestamp}.pdf")
         try:
-            export_markdown_file_to_pdf(output_file, output_pdf, title=result.get("title", "Untitled Document"))
+            export_markdown_file_to_pdf(output_file, output_pdf, title=result.get("title", "Untitled Document"), font_theme=font_theme)
             console.print(Panel.fit(f"✅ [bold green]Exported to PDF:[/bold green]\n{output_pdf}", border_style="green"))
         except Exception as exc:
             console.print(f"[bold red]PDF export failed:[/bold red] {exc}")
@@ -1023,6 +1056,72 @@ def run_book_mode():
         return
 
 
+def run_history_mode():
+    console.print(Panel.fit(
+        "📜  [bold gold1]History & PDF Export[/bold gold1]\n"
+        "[dim]Export older generations or books to PDF[/dim]",
+        border_style="gold1"
+    ))
+
+    choices = []
+
+    # 1. Look for Book Sessions in logs/
+    logs_dir = os.path.join(SCRIPT_DIR, "logs")
+    if os.path.isdir(logs_dir):
+        for name in sorted(os.listdir(logs_dir), reverse=True):
+            path = os.path.join(logs_dir, name)
+            chapters_path = os.path.join(path, "chapters")
+            if name.startswith("book_") and os.path.isdir(chapters_path):
+                # Ensure there are actually markdown files
+                mdown_files = [f for f in os.listdir(chapters_path) if f.lower().endswith(".md")]
+                if not mdown_files:
+                    continue
+                    
+                title = name
+                # Try to get title from state.json
+                state_path = os.path.join(path, "state.json")
+                if os.path.exists(state_path):
+                    try:
+                        with open(state_path, "r") as f:
+                            state = json.load(f)
+                            title = state.get('book_title', name)
+                    except: pass
+                choices.append(questionary.Choice(title=f"📖 {title} ({name})", value={"type": "book", "path": path, "title": title}))
+
+    # 2. Look for standalone Markdown files in outputs/
+    outputs_dir = os.path.join(SCRIPT_DIR, "outputs")
+    if os.path.isdir(outputs_dir):
+        for name in sorted(os.listdir(outputs_dir), reverse=True):
+            if name.lower().endswith(".md"):
+                choices.append(questionary.Choice(title=f"📄 {name}", value={"type": "file", "path": os.path.join(outputs_dir, name), "title": name}))
+
+    if not choices:
+        console.print("[yellow]No older generations found in logs/ or outputs/.[/yellow]")
+        return
+
+    selected = questionary.select(
+        "Select a generation to export to PDF:",
+        choices=choices + [questionary.Choice("Back to Main Menu", value=None)]
+    ).ask()
+
+    if not selected:
+        return
+
+    font_theme = pick_font_theme()
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_pdf = os.path.join(outputs_dir, f"history_export_{timestamp}.pdf")
+
+    try:
+        if selected["type"] == "book":
+            export_book_dir_to_pdf(selected["path"], selected["title"], output_pdf, font_theme=font_theme)
+        else:
+            export_markdown_file_to_pdf(selected["path"], output_pdf, font_theme=font_theme)
+        
+        console.print(Panel.fit(f"✅ [bold green]Exported to PDF:[/bold green]\n{output_pdf}", border_style="green"))
+    except Exception as exc:
+        console.print(f"[bold red]PDF export failed:[/bold red] {exc}")
+
+
 def main():
     while True:
         clear_screen()
@@ -1052,8 +1151,12 @@ def main():
                     value="short"
                 ),
                 questionary.Choice(
-                    title="�  Book Writing     — Extensive planning → Page-by-page iterative drafting",
+                    title="📖  Book Writing     — Extensive planning → Page-by-page iterative drafting",
                     value="book"
+                ),
+                questionary.Choice(
+                    title="📜  History Mode    — Export older generations or books to PDF",
+                    value="history"
                 ),
             ]
         ).ask()
@@ -1078,6 +1181,8 @@ def main():
             run_custom_mode()
         elif mode == "book":
             run_book_mode()
+        elif mode == "history":
+            run_history_mode()
 
         console.print("\n[bold green]✓ Mode completed![/bold green]")
 

@@ -10,6 +10,17 @@ BODY_WIDTH = PAGE_WIDTH - 2 * MARGIN
 BODY_HEIGHT = PAGE_HEIGHT - 2 * MARGIN
 
 
+def _normalize_text(text: str) -> str:
+    """Ensures text is compatible with standard PDF fonts while preserving meaning."""
+    replacements = {
+        # Only normalize if we fall back to basic fonts (triple dash is better than question mark)
+        '\u00a0': ' ',   # non-breaking space
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    return text
+
+
 def _clean_inline_markdown(text: str) -> str:
     text = re.sub(r'!\[([^\]]*)\]\([^\)]+\)', r'\1', text)
     text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)
@@ -25,10 +36,10 @@ def _clean_inline_markdown(text: str) -> str:
 
 def _extract_title_from_markdown(markdown_text: str) -> str:
     for line in markdown_text.splitlines():
-        match = re.match(r'^\s*#\s+(.+)$', line)
+        match = re.match(r'^\s*#{1,2}\s+(.+)$', line)
         if match:
             return match.group(1).strip()
-    return "Untitled Document"
+    return ""
 
 
 def _tokenize_markdown(markdown_text: str) -> list[dict]:
@@ -77,12 +88,88 @@ def _tokenize_markdown(markdown_text: str) -> list[dict]:
     if in_code and code_buffer:
         items.append({"type": "code", "text": "\n".join(code_buffer)})
 
+    # Post-process for math blocks
+    for item in items:
+        if item["type"] == "paragraph":
+            # Simple LaTeX detection for blocks like $$...$$
+            if item["text"].startswith("$$") and item["text"].endswith("$$"):
+                item["type"] = "math"
+                item["text"] = item["text"].strip("$").strip()
+
     return items
 
+
+def _find_system_font(names: list[str]) -> str | None:
+    """Finds a system font path from a list of possible names across OSes."""
+    search_paths = []
+    if os.name == "nt": # Windows
+        search_paths.append("C:/Windows/Fonts/")
+    elif os.name == "posix": # macOS and Linux
+        search_paths.extend([
+            "/Library/Fonts/", "/System/Library/Fonts/", 
+            "/usr/share/fonts/truetype/", "/usr/share/fonts/TTF/",
+            os.path.expanduser("~/.local/share/fonts/")
+        ])
+    
+    for base in search_paths:
+        if not os.path.exists(base): continue
+        for name in names:
+            for ext in [".ttf", ".TTF"]:
+                path = os.path.join(base, name + ext)
+                if os.path.exists(path):
+                    return path
+    return None
+
+def _get_safe_font(names: list[str], fallback: str) -> str:
+    """Returns a valid font path or the fallback name."""
+    path = _find_system_font(names)
+    if path:
+        try:
+            # Test if it can be loaded
+            f = fitz.Font(fontfile=path)
+            return path
+        except:
+            pass
+    return fallback
+
+# Pre-resolve fonts once at startup
+_SERIF = _get_safe_font(["times", "timesnewroman", "LiberationSerif-Regular"], "tiro")
+_SERIF_BOLD = _get_safe_font(["timesbd", "timesnewromanbold", "LiberationSerif-Bold"], "tibo")
+_SERIF_ITALIC = _get_safe_font(["timesi", "timesnewromanitalic", "LiberationSerif-Italic"], "tiit")
+
+_SANS = _get_safe_font(["arial", "segoeui", "Helvetica", "LiberationSans-Regular"], "helv")
+_SANS_BOLD = _get_safe_font(["arialbd", "segoeuib", "Helvetica-Bold", "LiberationSans-Bold"], "hebo")
+
+_MONO = _get_safe_font(["consola", "courier", "LiberationMono-Regular"], "cour")
+
+FONT_THEMES = {
+    "Modern Sans": {
+        "heading": _SANS_BOLD,
+        "body": _SANS,
+        "italic": _SANS,
+        "bold": _SANS_BOLD,
+        "mono": _MONO
+    },
+    "Classic Serif": {
+        "heading": _SERIF_BOLD,
+        "body": _SERIF,
+        "italic": _SERIF_ITALIC,
+        "bold": _SERIF_BOLD,
+        "mono": _MONO
+    },
+    "Academic": {
+        "heading": _SERIF_BOLD,
+        "body": _SERIF,
+        "italic": _SERIF_ITALIC,
+        "bold": _SERIF_BOLD,
+        "mono": _MONO
+    }
+}
 
 def _wrap_text(text: str, font: fitz.Font, fontsize: float, max_width: float) -> list[str]:
     if not text:
         return [""]
+    max_width -= 4
     words = re.split(r'(\s+)', text)
     lines = []
     current = ""
@@ -90,9 +177,12 @@ def _wrap_text(text: str, font: fitz.Font, fontsize: float, max_width: float) ->
         if not token:
             continue
         candidate = current + token
-        if font.text_length(candidate, fontsize) <= max_width or not current:
-            current = candidate
-            continue
+        try:
+            if font.text_length(candidate, fontsize) <= max_width or not current:
+                current = candidate
+                continue
+        except:
+            pass
         lines.append(current.rstrip())
         current = token.lstrip()
     if current:
@@ -100,154 +190,262 @@ def _wrap_text(text: str, font: fitz.Font, fontsize: float, max_width: float) ->
     return lines
 
 
-def _new_page(doc: fitz.Document) -> fitz.Page:
-    page = doc.new_page(width=PAGE_WIDTH, height=PAGE_HEIGHT)
-    return page
+def _setup_page_fonts(page: fitz.Page, theme_fonts: dict) -> dict:
+    """Registers fonts on a specific page and returns a mapping of names."""
+    mapping = {}
+    for key, val in theme_fonts.items():
+        # Only treat as a path if it looks like one and exists
+        if isinstance(val, str) and (val.endswith(".ttf") or val.endswith(".TTF")) and os.path.isabs(val):
+            font_name = f"F_{key}"
+            try:
+                page.insert_font(fontname=font_name, fontfile=val)
+                mapping[key] = font_name
+            except:
+                mapping[key] = "helv" 
+        else:
+            mapping[key] = val
+    return mapping
 
-
-def _draw_lines(page: fitz.Page, lines: list[str], fontname: str, fontsize: float, start_y: float, indent: float = 0, align: int = 0) -> float:
+def _get_font_obj(font_spec: str) -> fitz.Font:
+    """Helper to get a Font object safely for text wrapping."""
     try:
-        font = fitz.Font(fontname)
-    except Exception as e:
-        print(f"Warning: Could not load font '{fontname}'. Using default text drawing method. Error: {e}")
-        return -1 # Indicate failure to draw lines
-    y = start_y
-    line_height = fontsize * 1.35
-    max_width = BODY_WIDTH - indent
-    for text in lines:
-        if y + line_height > PAGE_HEIGHT - MARGIN:
-            return -1
-        rect = fitz.Rect(MARGIN + indent, y, PAGE_WIDTH - MARGIN, PAGE_HEIGHT - MARGIN)
-        page.insert_textbox(rect, text, fontname=fontname, fontsize=fontsize, align=align)
-        y += line_height
-    return y
+        if os.path.exists(font_spec):
+            return fitz.Font(fontfile=font_spec)
+        return fitz.Font(font_spec)
+    except:
+        return fitz.Font("helv")
 
 
-def _render_items(doc: fitz.Document, items: list[dict], start_y: float = None) -> None:
+def _new_page(doc: fitz.Document, theme_fonts: dict) -> tuple[fitz.Page, dict]:
+    page = doc.new_page(width=PAGE_WIDTH, height=PAGE_HEIGHT)
+    font_mapping = _setup_page_fonts(page, theme_fonts)
+    return page, font_mapping
+
+
+def _render_items(doc: fitz.Document, items: list[dict], theme_fonts: dict, start_y: float = None) -> None:
     if start_y is not None and len(doc) > 0:
         page = doc[-1]
+        font_mapping = _setup_page_fonts(page, theme_fonts)
         y = start_y
     else:
-        page = _new_page(doc)
+        page, font_mapping = _new_page(doc, theme_fonts)
         y = MARGIN
+
     for item in items:
+        if "text" in item:
+            item["text"] = _normalize_text(item["text"])
+            
         if item["type"] == "spacer":
             y += 12
             continue
 
         if item["type"] == "heading":
-            size = max(36 - (item["level"] - 1) * 4, 16)
-            if y + size * 1.4 > PAGE_HEIGHT - MARGIN:
-                page = _new_page(doc)
+            size = max(18 - (item["level"] - 1) * 2, 12)
+            if y + size * 2.5 > PAGE_HEIGHT - MARGIN:
+                page, font_mapping = _new_page(doc, theme_fonts)
                 y = MARGIN
             text = item["text"]
-            page.insert_textbox(fitz.Rect(MARGIN, y, PAGE_WIDTH - MARGIN, PAGE_HEIGHT - MARGIN), text, fontname="hebo", fontsize=size, align=1)
+            f_name = font_mapping["heading"] if item["level"] <= 2 else font_mapping["bold"]
+            page.insert_textbox(fitz.Rect(MARGIN, y, PAGE_WIDTH - MARGIN, y + size * 2.5), text, fontname=f_name, fontsize=size, align=1)
             y += size * 1.8
             continue
 
         if item["type"] == "blockquote":
-            wrapped = _wrap_text(item["text"], fitz.Font("helv"), 12, BODY_WIDTH - 20)
-            if y + len(wrapped) * 16 > PAGE_HEIGHT - MARGIN:
-                page = _new_page(doc)
+            f_italic = font_mapping["italic"]
+            wrapped = _wrap_text(item["text"], _get_font_obj(theme_fonts["italic"]), 12, BODY_WIDTH - 40)
+            if y + len(wrapped) * 20 > PAGE_HEIGHT - MARGIN:
+                page, font_mapping = _new_page(doc, theme_fonts)
                 y = MARGIN
-            page.insert_textbox(fitz.Rect(MARGIN + 20, y, PAGE_WIDTH - MARGIN, PAGE_HEIGHT - MARGIN), "\n".join(wrapped), fontname="heit", fontsize=12, align=0)
-            y += len(wrapped) * 16 + 10
+            for line in wrapped:
+                page.insert_textbox(fitz.Rect(MARGIN + 20, y, PAGE_WIDTH - MARGIN, y + 20), line, fontname=f_italic, fontsize=12, align=0)
+                y += 18
+            y += 10
+            continue
+
+        if item["type"] == "math":
+            f_mono = font_mapping["mono"]
+            wrapped = _wrap_text(item["text"], _get_font_obj(theme_fonts["mono"]), 11, BODY_WIDTH - 60)
+            if y + len(wrapped) * 20 > PAGE_HEIGHT - MARGIN:
+                page, font_mapping = _new_page(doc, theme_fonts)
+                y = MARGIN
+            for line in wrapped:
+                page.insert_textbox(fitz.Rect(MARGIN + 30, y, PAGE_WIDTH - MARGIN, y + 20), line, fontname=f_mono, fontsize=11, align=1, color=(0.1, 0.1, 0.3))
+                y += 18
+            y += 15
             continue
 
         if item["type"] == "list":
             bullet = "•" if not item["prefix"].strip().isdigit() else f"{item['prefix']}"
-            wrapped = _wrap_text(f"{bullet} {item['text']}", fitz.Font("helv"), 12, BODY_WIDTH - 20)
-            if y + len(wrapped) * 16 > PAGE_HEIGHT - MARGIN:
-                page = _new_page(doc)
+            f_body = font_mapping["body"]
+            wrapped = _wrap_text(f"{bullet} {item['text']}", _get_font_obj(theme_fonts["body"]), 12, BODY_WIDTH - 20)
+            if y + len(wrapped) * 20 > PAGE_HEIGHT - MARGIN:
+                page, font_mapping = _new_page(doc, theme_fonts)
                 y = MARGIN
             for line in wrapped:
-                page.insert_textbox(fitz.Rect(MARGIN + 20, y, PAGE_WIDTH - MARGIN, PAGE_HEIGHT - MARGIN), line, fontname="helv", fontsize=12, align=0)
-                y += 16
+                page.insert_textbox(fitz.Rect(MARGIN + 20, y, PAGE_WIDTH - MARGIN, y + 20), line, fontname=f_body, fontsize=12, align=0)
+                y += 18
             y += 4
             continue
 
         if item["type"] == "code":
+            f_mono = font_mapping["mono"]
             code_lines = item["text"].splitlines()
-            if y + len(code_lines) * 14 > PAGE_HEIGHT - MARGIN:
-                page = _new_page(doc)
+            if y + len(code_lines) * 18 > PAGE_HEIGHT - MARGIN:
+                page, font_mapping = _new_page(doc, theme_fonts)
                 y = MARGIN
             for code_line in code_lines:
-                wrapped = _wrap_text(code_line, fitz.Font("cour"), 10, BODY_WIDTH - 20)
+                wrapped = _wrap_text(code_line, _get_font_obj(theme_fonts["mono"]), 10, BODY_WIDTH - 20)
                 for line in wrapped:
-                    page.insert_textbox(fitz.Rect(MARGIN + 10, y, PAGE_WIDTH - MARGIN, PAGE_HEIGHT - MARGIN), line, fontname="cour", fontsize=10, align=0)
-                    y += 14
+                    page.insert_textbox(fitz.Rect(MARGIN + 10, y, PAGE_WIDTH - MARGIN, y + 16), line, fontname=f_mono, fontsize=10, align=0)
+                    y += 15
             y += 6
             continue
 
         if item["type"] == "paragraph":
-            wrapped = _wrap_text(item["text"], fitz.Font("helv"), 12, BODY_WIDTH)
-            if y + len(wrapped) * 16 > PAGE_HEIGHT - MARGIN:
-                page = _new_page(doc)
+            f_body = font_mapping["body"]
+            wrapped = _wrap_text(item["text"], _get_font_obj(theme_fonts["body"]), 12, BODY_WIDTH)
+            if y + len(wrapped) * 20 > PAGE_HEIGHT - MARGIN:
+                page, font_mapping = _new_page(doc, theme_fonts)
                 y = MARGIN
             for line in wrapped:
-                page.insert_textbox(fitz.Rect(MARGIN, y, PAGE_WIDTH - MARGIN, PAGE_HEIGHT - MARGIN), line, fontname="helv", fontsize=12, align=0)
-                y += 16
+                page.insert_textbox(fitz.Rect(MARGIN, y, PAGE_WIDTH - MARGIN, y + 20), line, fontname=f_body, fontsize=12, align=0)
+                y += 18
             y += 8
             continue
 
 
-def _add_title_page(doc: fitz.Document, title: str, subtitle: str = "") -> None:
-    try:
-        # Attempt to use a reliable font for the title page elements
-        title_font = fitz.Font("hebo")
-        subtitle_font = fitz.Font("helv")
-    except Exception as e:
-        print(f"Warning: Could not load fonts for title page. Using default text drawing method. Error: {e}")
-        return # Exit function if essential fonts cannot be loaded
+def _add_title_page(doc: fitz.Document, title: str, subtitle: str = "", summary: str = "", theme_fonts: dict = None) -> None:
+    if theme_fonts is None:
+        theme_fonts = FONT_THEMES["Modern Sans"]
+    
+    page, fonts = _new_page(doc, theme_fonts)
+    
+    # Elegant border lines
+    shape = page.new_shape()
+    shape.draw_line(fitz.Point(MARGIN, PAGE_HEIGHT*0.2), fitz.Point(PAGE_WIDTH-MARGIN, PAGE_HEIGHT*0.2))
+    shape.draw_line(fitz.Point(MARGIN, PAGE_HEIGHT*0.8), fitz.Point(PAGE_WIDTH-MARGIN, PAGE_HEIGHT*0.8))
+    shape.finish(width=1.0, color=(0.2, 0.2, 0.2))
+    shape.commit()
 
-    page = doc.new_page(width=PAGE_WIDTH, height=PAGE_HEIGHT)
-    title_rect = fitz.Rect(MARGIN, PAGE_HEIGHT * 0.28, PAGE_WIDTH - MARGIN, PAGE_HEIGHT * 0.48)
-    page.insert_textbox(title_rect, title, fontname="hebo", fontsize=48, align=1)
+    # Main Title
+    title_rect = fitz.Rect(MARGIN, PAGE_HEIGHT * 0.28, PAGE_WIDTH - MARGIN, PAGE_HEIGHT * 0.5)
+    title_fsize = 32 if len(title) < 40 else 24
+    page.insert_textbox(title_rect, title.upper(), fontname=fonts["heading"], fontsize=title_fsize, align=1, color=(0, 0, 0))
+    
+    # Summary (if available) - Adds weight to the page
+    if summary:
+        summary_rect = fitz.Rect(MARGIN + 40, PAGE_HEIGHT * 0.5, PAGE_WIDTH - MARGIN - 40, PAGE_HEIGHT * 0.65)
+        clean_summary = _normalize_text(summary)
+        page.insert_textbox(summary_rect, clean_summary, fontname=fonts["italic"], fontsize=12, align=1, color=(0.2, 0.2, 0.2))
+
+    # Subtitle / Generated On
     if subtitle:
-        subtitle_rect = fitz.Rect(MARGIN, PAGE_HEIGHT * 0.52, PAGE_WIDTH - MARGIN, PAGE_HEIGHT * 0.6)
-        page.insert_textbox(subtitle_rect, subtitle, fontname="helv", fontsize=16, align=1)
+        meta_rect = fitz.Rect(MARGIN, PAGE_HEIGHT * 0.68, PAGE_WIDTH - MARGIN, PAGE_HEIGHT * 0.72)
+        page.insert_textbox(meta_rect, subtitle, fontname=fonts["body"], fontsize=11, align=1, color=(0.4, 0.4, 0.4))
+
+    # Branding
+    footer_rect = fitz.Rect(MARGIN, PAGE_HEIGHT - 60, PAGE_WIDTH - MARGIN, PAGE_HEIGHT - 30)
+    page.insert_textbox(footer_rect, "ELD R I T C H   E N G I N E", fontname=fonts["heading"], fontsize=10, align=1, color=(0.6, 0.6, 0.6))
 
 
-def export_markdown_file_to_pdf(input_path: str, output_path: str, title: str = None) -> str:
+def _fill_toc_page(doc: fitz.Document, toc_page_index: int, toc_items: list, theme_fonts: dict) -> None:
+    page = doc[toc_page_index]
+    fonts = _setup_page_fonts(page, theme_fonts)
+    
+    y = MARGIN
+    page.insert_textbox(fitz.Rect(MARGIN, y, PAGE_WIDTH - MARGIN, y + 50), "Table of Contents", fontname=fonts["heading"], fontsize=28, align=1)
+    y += 70
+    for title, pno in toc_items:
+        if y + 30 > PAGE_HEIGHT - MARGIN:
+            # For simplicity, we only support one page of TOC for now
+            break
+        rect = fitz.Rect(MARGIN, y, PAGE_WIDTH - MARGIN, y + 25)
+        page.insert_textbox(rect, f"{title}", fontname=fonts["body"], fontsize=13, align=0)
+        page.insert_textbox(rect, f"{pno}", fontname=fonts["body"], fontsize=13, align=2)
+        y += 28
+
+
+def export_markdown_file_to_pdf(input_path: str, output_path: str, title: str = None, font_theme: str = "Modern Sans") -> str:
+    theme_fonts = FONT_THEMES.get(font_theme, FONT_THEMES["Modern Sans"])
     with open(input_path, "r", encoding="utf-8") as f:
         content = f.read()
-
     title_text = title or _extract_title_from_markdown(content)
-    subtitle = f"Generated on {datetime.now().strftime('%B %d, %Y')}"
-
     doc = fitz.open()
-    _add_title_page(doc, title_text, subtitle)
-    items = _tokenize_markdown(content)
-    _render_items(doc, items)
+    # Fixed: Use keyword arguments to avoid positional mismatch
+    _add_title_page(doc, title_text, subtitle=f"Generated on {datetime.now().strftime('%B %d, %Y')}", theme_fonts=theme_fonts)
+    _render_items(doc, _tokenize_markdown(content), theme_fonts=theme_fonts)
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     doc.save(output_path)
     doc.close()
     return output_path
 
 
-def export_book_dir_to_pdf(log_dir: str, book_title: str, output_path: str) -> str:
-    chapter_dir = os.path.join(log_dir, "chapters")
-    if not os.path.isdir(chapter_dir):
-        raise FileNotFoundError(f"No chapters directory found at {chapter_dir}")
+def _clean_chapter_title(title: str) -> str:
+    # Remove planning metadata often found in EldritchEngine logs
+    title = re.sub(r'\s*\*\*?\s*-\s*Core Topic/Goal.*$', '', title, flags=re.IGNORECASE)
+    title = title.strip().rstrip("*").strip()
+    return title
 
+
+def export_book_dir_to_pdf(log_dir: str, book_title: str, output_path: str, font_theme: str = "Modern Sans") -> str:
+    theme_fonts = FONT_THEMES.get(font_theme, FONT_THEMES["Modern Sans"])
+    chapter_dir = os.path.join(log_dir, "chapters")
+    # Sort chapter files numerically by the index in the filename (e.g. Chapter_1_...)
     chapter_files = sorted(
-        [os.path.join(chapter_dir, fn) for fn in os.listdir(chapter_dir) if fn.lower().endswith('.md')]
+        [os.path.join(chapter_dir, fn) for fn in os.listdir(chapter_dir) if fn.lower().endswith('.md')],
+        key=lambda x: int(re.search(r'Chapter_(\d+)', os.path.basename(x)).group(1)) if re.search(r'Chapter_(\d+)', os.path.basename(x)) else 0
     )
 
-    doc = fitz.open()
-    _add_title_page(doc, book_title, f"Generated on {datetime.now().strftime('%B %d, %Y')} - EldritchEngine")
+    # Try to load chapter titles and book summary from state.json
+    state_titles = {}
+    book_summary = ""
+    state_path = os.path.join(log_dir, "state.json")
+    if os.path.exists(state_path):
+        try:
+            import json
+            with open(state_path, "r", encoding="utf-8") as f:
+                state = json.load(f)
+                book_summary = state.get("book_summary", "")
+                for i, ch in enumerate(state.get("chapters", [])):
+                    state_titles[i] = _clean_chapter_title(ch.get("title", ""))
+        except:
+            pass
 
-    for chapter_path in chapter_files:
+    doc = fitz.open()
+    _add_title_page(doc, book_title, f"Generated on {datetime.now().strftime('%B %d, %Y')} - EldritchEngine", summary=book_summary, theme_fonts=theme_fonts)
+    
+    # Create TOC placeholder
+    toc_page, fonts = _new_page(doc, theme_fonts)
+    toc_page_index = doc.page_count - 1
+    
+    toc_items = []
+    for idx, chapter_path in enumerate(chapter_files):
         with open(chapter_path, "r", encoding="utf-8") as f:
             chapter_md = f.read()
+        
+        # Get title from state.json, then markdown, then filename
+        raw_title = state_titles.get(idx) or _extract_title_from_markdown(chapter_md) or os.path.splitext(os.path.basename(chapter_path))[0]
+        chapter_title = _clean_chapter_title(raw_title)
+        chapter_title = _normalize_text(chapter_title)
+        
+        chapter_label = f"Chapter {idx + 1}"
+        full_title = f"{chapter_label}: {chapter_title}"
+        
+        # Chapter Splash Page
+        splash_page, fonts = _new_page(doc, theme_fonts)
+        toc_items.append((full_title, doc.page_count)) 
+        
+        mid_y = PAGE_HEIGHT * 0.4
+        splash_page.insert_textbox(fitz.Rect(MARGIN, mid_y, PAGE_WIDTH - MARGIN, mid_y + 40), chapter_label, fontname=fonts["heading"], fontsize=26, align=1)
+        # Use a larger rectangle for the title to allow wrapping if still long
+        splash_page.insert_textbox(fitz.Rect(MARGIN, mid_y + 50, PAGE_WIDTH - MARGIN, mid_y + 300), chapter_title, fontname=fonts["heading"], fontsize=42, align=1)
+        
+        # Chapter Content
+        lines = chapter_md.splitlines()
+        content = "\n".join(lines[1:]) if lines and lines[0].strip().startswith("#") else chapter_md
+        _render_items(doc, _tokenize_markdown(content), theme_fonts=theme_fonts)
 
-        chapter_title = _extract_title_from_markdown(chapter_md) or os.path.splitext(os.path.basename(chapter_path))[0]
-        chapter_content = chapter_md
-        page = _new_page(doc)
-        page.insert_textbox(fitz.Rect(MARGIN, PAGE_HEIGHT * 0.18, PAGE_WIDTH - MARGIN, PAGE_HEIGHT * 0.28), chapter_title, fontname="hebo", fontsize=36, align=1)
-        y_start = PAGE_HEIGHT * 0.5
-        items = _tokenize_markdown(chapter_content)
-        _render_items(doc, items, start_y=y_start)
+    _fill_toc_page(doc, toc_page_index, toc_items, theme_fonts)
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     doc.save(output_path)

@@ -96,6 +96,10 @@ class BookWriterWorkflow:
             "The Critic", "Page Evaluator",
             self._load_prompt("iterative_critic.md")
         )
+        self.citation_manager = LMStudioAgent(
+            "Citation Manager", "Plagiarism & Citation Auditor",
+            self._load_prompt("citation_manager.md")
+        )
         self.title_agent = LMStudioAgent(
             "Title Generator", "Book Title Generator",
             "You are a creative book title generator. Given a book idea and style, suggest five strong and memorable book titles. Output only a numbered list of titles, no explanation."
@@ -453,6 +457,14 @@ Task: Combine the best elements from both drafts into a single, polished page. M
 
         return critique
 
+    def _citation_audit(self, chapter_text: str) -> str:
+        """Audit a chapter for plagiarism and add citations."""
+        audit_prompt = f"CHAPTER CONTENT:\n{chapter_text}\n\nTask: Audit the following chapter against the research notes. Ensure zero verbatim plagiarism and insert citations for specific data or unique ideas."
+        with console.status("[blue]Citation Manager is auditing the chapter...[/blue]"):
+            audited_text = self.citation_manager.chat(audit_prompt, context=self.research_notes[:30000])
+        return audited_text
+
+
     def run(self):
         console.print(Panel.fit(
             "📖 [bold gold1]Book Writing Mode[/bold gold1]\n"
@@ -575,7 +587,12 @@ Task: Combine the best elements from both drafts into a single, polished page. M
 
                 # end page loop
 
-            written_chapters.append({"title": chapter['title'], "content": "\n\n".join(chapter_content)})
+            full_chapter_text = "\n\n".join(chapter_content)
+            audited_text = self._citation_audit(full_chapter_text)
+            
+            # Save the audited version
+            self._save_chapter_file(ch_idx, chapter['title'], audited_text.split("\n\n"))
+            written_chapters.append({"title": chapter['title'], "content": audited_text})
 
         self.state["status"] = "complete"
         self.save_state()
