@@ -26,6 +26,7 @@ import deep_research_mode
 import modular_writer
 import research_cache
 import book_writer
+from pdf_exporter import export_book_dir_to_pdf, export_markdown_file_to_pdf
 
 console = Console()
 
@@ -400,7 +401,8 @@ def run_essay_mode():
                         title="Selected Thesis", border_style="green"
                     ))
 
-        workflow.run(selected_thesis=selected_thesis, target_word_count=target_words)
+        result = workflow.run(selected_thesis=selected_thesis, target_word_count=target_words)
+        _offer_pdf_export(result)
         console.print(f"\n[bold green]COMPLETE![/bold green]  Logs: [cyan]{workflow.log_dir}[/cyan]")
 
     except Exception as exc:
@@ -477,14 +479,12 @@ def run_short_mode():
             target_words=length_choice,
             research_notes=research_notes,
         )
-        wf.run()
+        result = wf.run()
+        _offer_pdf_export(result)
     except Exception as exc:
         console.print(f"\n[bold red]ERROR:[/bold red] {exc}")
         raise
 
-
-# ---------------------------------------------------------------------------
-# Mode: Iterative
 # ---------------------------------------------------------------------------
 
 def run_iterative_mode():
@@ -549,7 +549,8 @@ def run_iterative_mode():
     # Execute
     try:
         wf = iterative_writer.IterativeWriterWorkflow(user_prompt, research_notes, para_count, style_choice)
-        wf.run()
+        result = wf.run()
+        _offer_pdf_export(result)
     except Exception as exc:
         console.print(f"\n[bold red]ERROR:[/bold red] {exc}")
         raise
@@ -621,6 +622,35 @@ def _save_workflow(config: dict) -> str:
     with open(save_path, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=2)
     return save_path
+
+
+def _offer_pdf_export(result: dict | None):
+    if not result:
+        return
+
+    if not questionary.confirm("Export finished writing output to PDF?", default=True).ask():
+        return
+
+    os.makedirs(os.path.join(SCRIPT_DIR, "outputs"), exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    if result.get("type") == "book":
+        output_pdf = os.path.join(SCRIPT_DIR, "outputs", f"book_export_{timestamp}.pdf")
+        try:
+            export_book_dir_to_pdf(result["log_dir"], result.get("title", "Untitled Book"), output_pdf)
+            console.print(Panel.fit(f"✅ [bold green]Book exported to PDF:[/bold green]\n{output_pdf}", border_style="green"))
+        except Exception as exc:
+            console.print(f"[bold red]PDF export failed:[/bold red] {exc}")
+    else:
+        output_file = result.get("output_file")
+        if not output_file or not os.path.exists(output_file):
+            console.print("[bold red]No output file found to export.[/bold red]")
+            return
+        output_pdf = os.path.join(SCRIPT_DIR, "outputs", f"text_export_{timestamp}.pdf")
+        try:
+            export_markdown_file_to_pdf(output_file, output_pdf, title=result.get("title", "Untitled Document"))
+            console.print(Panel.fit(f"✅ [bold green]Exported to PDF:[/bold green]\n{output_pdf}", border_style="green"))
+        except Exception as exc:
+            console.print(f"[bold red]PDF export failed:[/bold red] {exc}")
 
 
 def _build_workflow_tui(topic: str) -> dict | None:
@@ -767,7 +797,7 @@ def _get_research_for_workflow(workflow_name: str) -> str:
         pdf_choice = questionary.select("Select PDF:", choices=pdfs).ask()
         if pdf_choice:
             pdf_path = os.path.join(input_dir, pdf_choice)
-            notes    = research_cache.get_or_create_cache(pdf_path, modular_writer.extract_pdf_text)
+            notes    = modular_writer.extract_pdf_text(pdf_path)
             return notes
 
     return ""
@@ -845,9 +875,13 @@ def run_custom_mode():
         research_notes = _get_research_for_workflow(config["name"])
 
     # ── Run ───────────────────────────────────────────────────────────────────
-    wf = modular_writer.ModularWorkflow(config, topic, research_notes)
-    wf.run()
-
+    try:
+        wf = modular_writer.ModularWorkflow(config, topic, research_notes)
+        result = wf.run()
+        _offer_pdf_export(result)
+    except Exception as exc:
+        console.print(f"\n[bold red]ERROR:[/bold red] {exc}")
+        raise
 
 # ---------------------------------------------------------------------------
 # Mode: Book Writing
@@ -878,7 +912,8 @@ def run_book_mode():
                 if selected:
                     try:
                         wf = book_writer.BookWriterWorkflow(resume_dir=selected)
-                        wf.run()
+                        result = wf.run()
+                        _offer_pdf_export(result)
                     except Exception as exc:
                         console.print(f"\n[bold red]ERROR:[/bold red] {exc}")
                         raise
@@ -978,7 +1013,8 @@ def run_book_mode():
 
         try:
             wf = book_writer.BookWriterWorkflow(user_prompt, research_notes, book_title=book_title, book_style=style_choice, auto_accept=auto_accept)
-            wf.run()
+            result = wf.run()
+            _offer_pdf_export(result)
         except Exception as exc:
             console.print(f"\n[bold red]ERROR:[/bold red] {exc}")
             raise

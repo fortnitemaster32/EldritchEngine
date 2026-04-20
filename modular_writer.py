@@ -284,6 +284,11 @@ class ModularWorkflow:
             f"✅ [bold green]Complete![/bold green]\n"
             f"Output: [underline]{path}[/underline]\nLogs: [underline]{self.log_dir}[/underline]",
             border_style="green"))
+        return {
+            "type": "single",
+            "output_file": path,
+            "title": self.workflow_name,
+        }
 
 
 def extract_pdf_text(pdf_path: str) -> str:

@@ -326,4 +326,8 @@ class ShortWriterWorkflow:
             f"Logs:   [bold underline]{self.log_dir}[/bold underline]",
             border_style="green"
         ))
-        return final
+        return {
+            "type": "single",
+            "output_file": output_file,
+            "title": self.user_prompt,
+        }

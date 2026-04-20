@@ -223,27 +223,18 @@ Topic/Prompt: {self.user_prompt}
 Style/Atmosphere: {self.book_style}
 Book Title: {self.book_title or 'TBD'}
 
-Task: Create an extremely detailed, hierarchical outline for an entire book based on this prompt.
-Structure the outline as follows:
+Task: Create a High-Level Master Vision and Outline for this book. 
+This is the 'Big Plan' phase. Focus on the overarching narrative arc, major character developments, and the core message/themes.
 
-1. **Book Title**
-2. **Genre/Style**
-3. **Overall Summary** (2-3 paragraphs)
-4. **Main Characters** (detailed bios, arcs, motivations)
-5. **Key Themes and Motifs**
-6. **Plot Structure**:
-   - **Part 1**: [Title] - Summary
-     - **Chapter 1**: [Title] - Detailed summary (what happens, key scenes, character developments)
-       - **Page 1**: Brief description of content (approx 500-800 words)
-       - **Page 2**: ...
-     - **Chapter 2**: ...
-   - **Part 2**: ...
-7. **World-Building Elements** (if applicable)
-8. **Tone and Voice Guidelines**
-9. **Estimated Total Pages**: [number]
+Structure the Master Vision as follows:
+1. **Master Vision**: Core concept and 'hook'.
+2. **Detailed Synopsis**: 5-8 paragraphs covering the beginning, middle, and end.
+3. **Character Matrix**: Detailed profiles, hidden motivations, and complete arcs.
+4. **Structural Blueprint**:
+   - Divide the book into logical Parts/Acts.
+   - List Chapters under each Part with a 1-2 sentence summary of each.
 
-Be exhaustive in detail. Each chapter should have 5-15 pages, each page described specifically.
-Output in clean Markdown format.
+Output in clean Markdown format. This plan will serve as the foundation for a much more detailed sub-topic plan.
 """
 
         outline_path = os.path.join(self.log_dir, "0_Book_Outline.md")
@@ -280,28 +271,22 @@ Output in clean Markdown format.
                 detailed_plan = f.read()
         else:
             topic_plan_prompt = f"""
-Initial Outline:
+Master Vision / Initial Outline:
 {outline}
 
-Task: Based on the initial outline, create a detailed plan with 20-40 unique, non-repetitive topics that cover the entire book comprehensively. Ensure topics are diverse and avoid redundancy.
+Task: Based on the Master Vision, create an EXTREMELY DETAILED Phase 2 Planning Document.
+This plan must break the book down into Chapters and then into specific Topics.
+A Topic should span 3-6 pages.
+Each Chapter must have a central Topic/Theme.
 
-For each topic:
-- Provide a brief description
-- Create 2-3 specific page descriptions (each page ~500-800 words) that develop this topic
+For each Chapter, provide:
+1. **Chapter X: [Chapter Title]** - Core Topic/Goal of this chapter.
+2. **Topic: [Sub-Topic Title]** (Pages Y-Z) - A detailed focus for a group of 3-6 pages.
+   - **Page Y**: [Extreme Detail] Describe exactly what happens. Mention sensory details, specific dialogue beats, and emotional shifts.
+   - **Page Y+1**: ...
+3. **Topic: [Next Sub-Topic]** ...
 
-Then, group these topics into 10-15 logical chapters. Each chapter should contain 3-6 topics, resulting in 6-18 pages per chapter.
-
-Structure the output as:
-
-**Chapter 1: [Title]**
-- **Topic 1: [Title]**
-  - Page 1: [Detailed description of content]
-  - Page 2: [Detailed description]
-  - Page 3: [If needed]
-- **Topic 2: [Title]**
-  - etc.
-
-Ensure the topics flow logically across chapters and cover all aspects of the book without repetition.
+Crucial: Ensure extreme detail for every single page. Avoid repetitiveness by ensuring each topic and each page has a unique purpose. No two pages should feel like they are doing the same work.
 Output in clean Markdown format.
 """
 
@@ -341,51 +326,29 @@ Output in clean Markdown format.
         chapters = []
         current_chapter = None
         current_pages = []
-        chapter_pattern = re.compile(r'Chapter\s*\d+:', re.IGNORECASE)
-        page_pattern = re.compile(r'[•\-]\s*Page\s*\d+:', re.IGNORECASE)
+        
+        # More robust patterns
+        chapter_pattern = re.compile(r'(?:\*\*|#)?Chapter\s*(\d+)\s*:?\s*(.*?)(?:\*\*|#)?$', re.IGNORECASE)
+        page_pattern = re.compile(r'(?:[•\-*]|\d+\.)?\s*(?:\*\*|#)?Page\s*(\d+)\s*:?\s*(.*?)(?:\*\*|#)?$', re.IGNORECASE)
 
         for line in plan.splitlines():
-            stripped = line.strip()
-            if not stripped:
+            line = line.strip()
+            if not line:
                 continue
 
-            if chapter_pattern.search(stripped):
+            ch_match = chapter_pattern.search(line)
+            if ch_match:
                 if current_chapter:
                     chapters.append({"title": current_chapter, "pages": current_pages})
-                current_chapter = stripped
+                current_chapter = ch_match.group(2).strip() or f"Chapter {ch_match.group(1)}"
                 current_pages = []
                 continue
 
-            if current_chapter and page_pattern.search(stripped):
-                # Extract the page description after the colon
-                page_desc = stripped.split(':', 1)[1].strip() if ':' in stripped else stripped
-                current_pages.append(page_desc)
-
-        if current_chapter:
-            chapters.append({"title": current_chapter, "pages": current_pages})
-
-        return chapters
-        """Extract chapters and pages from the outline."""
-        chapters = []
-        current_chapter = None
-        current_pages = []
-        chapter_pattern = re.compile(r'chapter\s*\d+', re.IGNORECASE)
-        page_pattern = re.compile(r'page\s*\d+', re.IGNORECASE)
-
-        for line in outline.splitlines():
-            stripped = line.strip()
-            if not stripped:
-                continue
-
-            if chapter_pattern.search(stripped) and ':' in stripped:
-                if current_chapter:
-                    chapters.append({"title": current_chapter, "pages": current_pages})
-                current_chapter = stripped
-                current_pages = []
-                continue
-
-            if current_chapter and page_pattern.search(stripped) and ':' in stripped:
-                current_pages.append(stripped)
+            pg_match = page_pattern.search(line)
+            if pg_match:
+                page_desc = pg_match.group(2).strip()
+                if page_desc:
+                    current_pages.append(page_desc)
 
         if current_chapter:
             chapters.append({"title": current_chapter, "pages": current_pages})
@@ -394,24 +357,34 @@ Output in clean Markdown format.
 
     def condense_context(self, master_outline: str, previous_chapters: list, current_chapter: dict, page_index: int) -> str:
         """Create condensed context for current page"""
+        
+        # Build a cumulative summary of the book so far to ensure consistency
+        book_history = ""
+        for i, ch in enumerate(previous_chapters):
+            ch_title = ch.get("title", f"Chapter {i+1}")
+            # Use a snippet or a summary if possible
+            content_snippet = ch["content"][:1500] + "..." if len(ch["content"]) > 1500 else ch["content"]
+            book_history += f"### {ch_title} SUMMARY ###\n{content_snippet}\n\n"
+
         context_prompt = f"""
-Master Outline:
-{master_outline}
+Master Vision / Outline:
+{master_outline[:8000]}
 
-Previous Chapters Written:
-{'\n\n'.join([f'Chapter: {ch["title"]}\nContent: {ch["content"][:2000]}...' for ch in previous_chapters])}
+BOOK PROGRESS SO FAR:
+{book_history[-15000:]} 
 
-Current Chapter: {current_chapter['title']}
-Current Page: {page_index + 1} - {current_chapter['pages'][page_index] if page_index < len(current_chapter['pages']) else 'Continuation'}
+CURRENT CHAPTER: {current_chapter['title']}
+CURRENT PAGE GOAL: Page {page_index + 1} - {current_chapter['pages'][page_index] if page_index < len(current_chapter['pages']) else 'Continuation'}
 
-Task: Condense the most relevant context for writing this page. Include:
-- Current character states and motivations
-- Active plot threads
-- Thematic elements to maintain
-- Key world-building details
-- Immediate setup from previous page/chapter
+Task: Synthesize the 'Perfect Context' for the next writer. 
+Include:
+1. **The 'Thread'**: What exactly is happening right now?
+2. **Character Status**: What is [Character Name]'s current emotional and physical state?
+3. **Implicit Knowledge**: What are the latest developments that MUST be respected?
+4. **Anti-Repetition**: What themes or words have been overused recently that should be avoided?
+5. **Immediate Setup**: How did the previous page end?
 
-Keep it concise but comprehensive. Output in Markdown.
+Keep it dense and extremely helpful for maintaining continuity and detail.
 """
 
         condensed = self.condenser.chat(context_prompt, context="")
@@ -421,22 +394,29 @@ Keep it concise but comprehensive. Output in Markdown.
 
     def write_page(self, master_outline: str, condensed_context: str, chapter_title: str, page_desc: str, page_index: int, previous_pages: list) -> str:
         """Write a single page"""
-        rolling_context = "\n\n".join(previous_pages[-3:]) if previous_pages else ""  # Last 3 pages
+        rolling_context = "\n\n".join(previous_pages[-2:]) if previous_pages else "Start of chapter."
 
         write_prompt = f"""
-Master Outline:
-{master_outline[:10000]}
+MASTER VISION:
+{master_outline[:5000]}
 
-Condensed Context:
+SITUATIONAL CONTEXT:
 {condensed_context}
 
-Chapter: {chapter_title}
-Page {page_index + 1}: {page_desc}
+CHAPTER: {chapter_title}
+PAGE GOAL: Page {page_index + 1}: {page_desc}
 
-Rolling Context (Previous Pages):
+PREVIOUS PAGES (Immediate Continuity):
 {rolling_context}
 
-Task: Write this page of the book. Aim for 500-800 words. Maintain consistent tone, character voices, and plot continuity. Begin seamlessly from the previous page if applicable. Do NOT summarize or conclude the book yet.
+Task: Write this page with EXTREME DETAIL. 
+- Use evocative, sensory language.
+- Ensure character internal monologues or subtle physical cues are present.
+- Do NOT rush the plot. Expand the moments.
+- Target Length: 600-900 words.
+- Tone: {self.book_style}
+
+Crucial: Maintain absolute continuity with the SITUATIONAL CONTEXT and PREVIOUS PAGES. Avoid repetition of phrases or ideas from the context.
 """
 
         with console.status(f"[green]Writing Page {page_index + 1}...[/green]"):
@@ -606,3 +586,9 @@ Task: Combine the best elements from both drafts into a single, polished page. M
             f"Logs: [bold underline]{self.log_dir}[/bold underline]",
             border_style="green"
         ))
+        return {
+            "type": "book",
+            "log_dir": self.log_dir,
+            "title": self.book_title or self.user_prompt,
+            "style": self.book_style,
+        }

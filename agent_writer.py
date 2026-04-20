@@ -416,6 +416,11 @@ class AgenticWorkflow:
             f"Step-by-step logs saved in: [bold underline]{self.log_dir}[/bold underline]",
             border_style="green"
         ))
+        return {
+            "type": "single",
+            "output_file": output_file,
+            "title": self.user_prompt,
+        }
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:

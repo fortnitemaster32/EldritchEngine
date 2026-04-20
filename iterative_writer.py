@@ -270,3 +270,8 @@ class IterativeWriterWorkflow:
             f"Final Essay saved to: [bold underline]{self.output_file}[/bold underline]",
             border_style="green"
         ))
+        return {
+            "type": "single",
+            "output_file": self.output_file,
+            "title": self.user_prompt,
+        }
