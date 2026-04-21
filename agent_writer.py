@@ -151,7 +151,7 @@ class AgenticWorkflow:
         # Agents
         self.scholar = LMStudioAgent("The Scholar", "Lead Researcher", self._load_prompt("scholar.md"))
         self.strategist = LMStudioAgent("The Strategist", "Lead Philosopher", self._load_prompt("strategist.md"))
-        self.manager = LMStudioAgent("The Manager", "Architect", self._load_prompt("manager.md"))
+        self.manager = LMStudioAgent("The Manager", "Architect", self._load_prompt("architect.md"))
         self.author = LMStudioAgent("The Author", "Master Writer", self._load_prompt("author.md"))
         self.editor = LMStudioAgent("The Editor", "Chief Editor", self._load_prompt("editor.md"))
 
