@@ -86,7 +86,7 @@ def run_memory_mode(script_dir):
                         return 0
 
                 with console.status("[cyan]Mass Indexing in parallel...[/cyan]"):
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
                         results = list(executor.map(index_file, unindexed))
                         success_count = sum(results)
                 
