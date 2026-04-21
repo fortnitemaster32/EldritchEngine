@@ -34,6 +34,24 @@ class PermanentMemory:
                 return []
         return []
 
+    def get_storage_stats(self) -> Dict:
+        """Calculate forensic statistics for the memory vault."""
+        if not self.index:
+            return {"files": 0, "chunks": 0, "size_kb": 0}
+        
+        sources = set(item["source"] for item in self.index)
+        size_bytes = os.path.getsize(self.memory_file) if os.path.exists(self.memory_file) else 0
+        
+        return {
+            "files": len(sources),
+            "chunks": len(self.index),
+            "size_kb": round(size_bytes / 1024, 2)
+        }
+
+    def is_file_indexed(self, source_name: str) -> bool:
+        """Check if a specific file has already been indexed."""
+        return any(item["source"] == source_name for item in self.index)
+
     def _save_index(self):
         with open(self.memory_file, "w", encoding="utf-8") as f:
             json.dump(self.index, f, indent=2)
