@@ -194,26 +194,36 @@ class DeepResearchWorkflow:
             
         self._log_step("3_Final_Synthesis", final_paper)
         
-        # Save output
-        os.makedirs(os.path.join(SCRIPT_DIR, "outputs"), exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_file = os.path.join(SCRIPT_DIR, "outputs", f"deep_research_paper_{timestamp}.md")
-        with open(output_file, "w", encoding="utf-8") as fh:
-            fh.write(final_paper)
+        # --- Phase 4: Aggregated Dossier (High Density) ---
+        console.print("\n[bold cyan]Phase 4: Compiling the Aggregated Scholarly Dossier (High Density)...[/bold cyan]")
+        
+        dossier_content = f"# Aggregated Scholarly Dossier: {os.path.basename(self.pdf_path)}\n\n"
+        dossier_content += f"**Research Focus**: {self.user_prompt}\n\n"
+        dossier_content += "This document contains the complete, unedited research notes from all four specialized scholars. Use this for maximum information density.\n\n"
+        
+        for scholar in self.scholars:
+            dossier_content += f"\n\n{'='*40}\n"
+            dossier_content += f"# DISCIPLINE: {scholar.role} ({scholar.name})\n"
+            dossier_content += f"{'='*40}\n\n"
+            dossier_content += compiled_notes[scholar.name]
             
-        # Cache the final paper so it can be used in other modes
-        cache_id = research_cache.save_research(
-            source_name=os.path.basename(self.pdf_path) + " (Deep Research)",
+        dossier_path = os.path.join(self.log_dir, "5_Aggregated_Scholarly_Dossier.md")
+        with open(dossier_path, "w", encoding="utf-8") as f:
+            f.write(dossier_content)
+            
+        # Cache the dossier separately
+        dossier_cache_id = research_cache.save_research(
+            source_name=os.path.basename(self.pdf_path) + " (Full Scholarly Dossier)",
             prompt=self.user_prompt,
-            research_notes=final_paper,
+            research_notes=dossier_content,
             page_count=len(self.pdf_pages),
         )
 
         console.print(Panel.fit(
             f"✅ [bold green]Deep Research Complete![/bold green]\n\n"
-            f"Output: [bold underline]{output_file}[/bold underline]\n"
-            f"Logs:   [bold underline]{self.log_dir}[/bold underline]\n"
-            f"Saved to Cache as: [bold]{cache_id}[/bold]",
+            f"1. Final Synthesis: [cyan]{output_file}[/cyan]\n"
+            f"2. High-Density Dossier: [cyan]{dossier_cache_id}[/cyan]\n"
+            f"3. Factual Cache: [cyan]{cache_id}[/cyan]",
             border_style="green"
         ))
 
