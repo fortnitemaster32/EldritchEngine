@@ -16,6 +16,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskPr
 import math
 import agent_writer
 import research_cache
+import config_manager
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 console = Console()
@@ -231,7 +232,9 @@ class DeepResearchWorkflow:
         ) as progress:
             overall_task = progress.add_task("[bold gold1]Drafting Chapters...[/bold gold1]", total=len(chapters))
             
-            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            max_workers = config_manager.get_setting("max_concurrency")
+            console.print(f"  [dim]Using {max_workers} parallel workers...[/dim]")
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
                 future_to_chapter = {
                     executor.submit(draft_chapter, i, title): title 
                     for i, title in enumerate(chapters)

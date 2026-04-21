@@ -11,6 +11,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import agent_writer
 import research_cache
+import config_manager
 
 console = Console()
 
@@ -71,7 +72,8 @@ def run_retro_synthesis(log_dir):
     if not chapters: chapters = ["1. Comprehensive Synthesis"]
 
     # 4. Parallel Chapter Drafting
-    console.print(f"\n[bold green]Writing {len(chapters)} Chapters (2 Parallely)...[/bold green]")
+    max_workers = config_manager.get_setting("max_concurrency")
+    console.print(f"\n[bold green]Writing {len(chapters)} Chapters ({max_workers} Parallely)...[/bold green]")
     
     sections = [None] * len(chapters)
     
@@ -91,7 +93,7 @@ def run_retro_synthesis(log_dir):
     ) as progress:
         overall_task = progress.add_task("[bold gold1]Drafting Chapters...[/bold gold1]", total=len(chapters))
         
-        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_chapter = {
                 executor.submit(draft_chapter, i, title): title 
                 for i, title in enumerate(chapters)

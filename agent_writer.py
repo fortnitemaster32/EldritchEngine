@@ -4,6 +4,7 @@ import fitz  # PyMuPDF
 from openai import OpenAI
 from typing import List, Dict
 import json
+import config_manager
 import time
 import threading
 import re
@@ -21,7 +22,9 @@ from rich.markdown import Markdown
 console = Console()
 
 class LMStudioAgent:
-    def __init__(self, name: str, role: str, system_prompt: str, base_url: str = "http://localhost:1234/v1"):
+    def __init__(self, name: str, role: str, system_prompt: str, base_url: str = None):
+        if base_url is None:
+            base_url = config_manager.get_setting("lm_studio_url")
         self.name = name
         self.role = role
         self.system_prompt = system_prompt
@@ -45,7 +48,9 @@ class LMStudioAgent:
         return response.choices[0].message.content
 
     @staticmethod
-    def check_connection(base_url: str = "http://localhost:1234/v1") -> bool:
+    def check_connection(base_url: str = None) -> bool:
+        if base_url is None:
+            base_url = config_manager.get_setting("lm_studio_url")
         """Checks if LM Studio is reachable using standard library urllib."""
         import urllib.request
         import urllib.error

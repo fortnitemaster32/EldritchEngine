@@ -1,0 +1,38 @@
+import questionary
+from rich.panel import Panel
+from ui_core import console, clear_screen
+import config_manager
+
+def run_settings_mode():
+    while True:
+        clear_screen()
+        console.print(Panel.fit("⚙️  [bold gold1]Engine Settings[/bold gold1]", border_style="gold1"))
+        
+        config = config_manager.load_config()
+        
+        choices = [
+            questionary.Choice(f"Concurrency (Current: {config['max_concurrency']})", value="concurrency"),
+            questionary.Choice(f"LM Studio URL (Current: {config['lm_studio_url']})", value="url"),
+            questionary.Choice("Back", value="back")
+        ]
+        
+        choice = questionary.select("Select a setting to change:", choices=choices).ask()
+        
+        if not choice or choice == "back":
+            break
+            
+        if choice == "concurrency":
+            val = questionary.text("Enter max parallel tasks (e.g. 2, 4, 8):", default=str(config['max_concurrency'])).ask()
+            if val and val.isdigit():
+                config['max_concurrency'] = int(val)
+                config_manager.save_config(config)
+                console.print(f"[green]✓ Set max concurrency to {val}[/green]")
+                questionary.press_any_key_to_continue().ask()
+                
+        elif choice == "url":
+            val = questionary.text("Enter LM Studio Base URL:", default=config['lm_studio_url']).ask()
+            if val:
+                config['lm_studio_url'] = val
+                config_manager.save_config(config)
+                console.print(f"[green]✓ Set LM Studio URL to {val}[/green]")
+                questionary.press_any_key_to_continue().ask()

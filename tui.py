@@ -23,6 +23,7 @@ def main():
                 questionary.Choice("📖  Book Writing", value="book"),
                 questionary.Choice("🛠️   Custom Workflow", value="custom"),
                 questionary.Choice("📜  History & Export", value="history"),
+                questionary.Choice("⚙️   Settings", value="settings"),
                 questionary.Choice("❌  Exit", value="exit"),
             ]
         ).ask()
@@ -31,7 +32,7 @@ def main():
             break
 
         # Check connection for LLM-dependent modes
-        if mode not in ["history"]:
+        if mode not in ["history", "settings"]:
             if not check_llm_connection():
                 continue
 
@@ -63,6 +64,9 @@ def main():
             elif mode == "history":
                 from modes.history import run_history_mode
                 run_history_mode(SCRIPT_DIR)
+            elif mode == "settings":
+                from modes.settings import run_settings_mode
+                run_settings_mode()
         except KeyboardInterrupt:
             console.print("\n[yellow]Action cancelled by user. Returning to menu...[/yellow]")
             questionary.press_any_key_to_continue().ask()
