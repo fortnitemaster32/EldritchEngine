@@ -178,61 +178,64 @@ class ShortWriterWorkflow:
         words_per_section = math.ceil(self.target_words / num_sections)
         written_sections: List[str] = []
 
-        console.print(
-            f"\n[bold cyan]The {writer_agent.name} is composing "
-            f"{num_sections} sections (~{words_per_section} words each) [{writer_type}]...[/bold cyan]"
-        )
+    def _run_draft_loop(self, outline, writer_agent, writer_type, num_sections, words_per_section, written_sections, telemetry, prog=None, task=None):
+        for i in range(num_sections):
+            is_first = i == 0
+            is_last  = i == num_sections - 1
 
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            console=console
-        ) as prog:
-            task = prog.add_task(f"Writing section 1 ({writer_type})...", total=num_sections)
+            def on_update(data):
+                if telemetry:
+                    telemetry.update(f"{writer_agent.name} (S{i+1})", data)
+                    telemetry.refresh()
 
-            for i in range(num_sections):
-                is_first = i == 0
-                is_last  = i == num_sections - 1
+            # Rolling context
+            rolling = ""
+            if written_sections:
+                all_so_far = "\n\n".join(written_sections)
+                last_words = all_so_far.split()[-ROLLING_WORD_WINDOW:]
+                rolling = " ".join(last_words)
 
-                def on_update(data):
-                    if telemetry:
-                        telemetry.update(f"{writer_agent.name} (S{i+1})", data)
-                        telemetry.refresh()
+            position = (
+                "opening section" if is_first
+                else ("final section — bring the piece to a decisive close" if is_last
+                      else f"section {i + 1} of {num_sections}")
+            )
 
-                # Rolling context — last N words already written
-                rolling = ""
-                if written_sections:
-                    all_so_far = "\n\n".join(written_sections)
-                    last_words = all_so_far.split()[-ROLLING_WORD_WINDOW:]
-                    rolling = " ".join(last_words)
-
-                position = (
-                    "opening section" if is_first
-                    else ("final section — bring the piece to a decisive close" if is_last
-                          else f"section {i + 1} of {num_sections}")
+            prompt = (
+                f"FULL OUTLINE:\n{outline}\n\n"
+                + (
+                    f"ALREADY WRITTEN (continue seamlessly from the last word):\n"
+                    f"...{rolling}\n\n"
+                    if rolling else
+                    "This is the OPENING — begin the piece immediately.\n\n"
                 )
+                + f"TASK: Write the {position}. "
+                + f"Aim for approximately {words_per_section} words. "
+            )
 
-                prompt = (
-                    f"FULL OUTLINE:\n{outline}\n\n"
-                    + (
-                        f"ALREADY WRITTEN (continue seamlessly from the last word):\n"
-                        f"...{rolling}\n\n"
-                        if rolling else
-                        "This is the OPENING — begin the piece immediately.\n\n"
-                    )
-                    + f"TASK: Write the {position}. "
-                    + f"Aim for approximately {words_per_section} words. "
-                )
+            section_text = writer_agent.chat(
+                prompt,
+                context=self._research_context(),
+                on_update=on_update
+            )
+            written_sections.append(section_text)
+            if telemetry: telemetry.update(f"{writer_agent.name} (S{i+1})", {"status": "[green]Done[/green]", "tps": 0, "tokens": 0})
+            
+            if prog and task:
+                prog.update(task, advance=1, description=f"Writing section {i+2} ({writer_type})..." if i+1 < num_sections else "Done")
 
-                section_text = writer_agent.chat(
-                    prompt,
-                    context=self._research_context(),
-                    on_update=on_update
-                )
-                written_sections.append(section_text)
-                if telemetry: telemetry.update(f"{writer_agent.name} (S{i+1})", {"status": "[green]Done[/green]", "tps": 0, "tokens": 0})
+        if not telemetry:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TaskProgressColumn(),
+                console=console
+            ) as prog:
+                task = prog.add_task(f"Writing section 1 ({writer_type})...", total=num_sections)
+                self._run_draft_loop(outline, writer_agent, writer_type, num_sections, words_per_section, written_sections, telemetry, prog, task)
+        else:
+            self._run_draft_loop(outline, writer_agent, writer_type, num_sections, words_per_section, written_sections, telemetry)
 
         full_draft = "\n\n".join(written_sections)
         total_words = self._measure_word_count(full_draft)
