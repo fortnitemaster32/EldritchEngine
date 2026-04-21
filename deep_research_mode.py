@@ -10,7 +10,6 @@ import os
 import sys
 import concurrent.futures
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
@@ -18,6 +17,7 @@ import math
 import agent_writer
 import research_cache
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 console = Console()
 
 class DeepResearchWorkflow:
