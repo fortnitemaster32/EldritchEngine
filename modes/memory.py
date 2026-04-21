@@ -42,8 +42,8 @@ def run_memory_mode(script_dir):
             questionary.press_any_key_to_continue().ask()
 
         elif choice == "Mass Index Unadded Logs (Deep Scan)":
-            import agent_writer
-            if not agent_writer.check_llm_connection():
+            from ui_core import check_llm_connection
+            if not check_llm_connection():
                 continue
                 
             log_root = os.path.join(script_dir, "logs")
