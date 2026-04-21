@@ -97,44 +97,55 @@ class DeepResearchWorkflow:
         # We will iterate through chunks. For each chunk, the 4 scholars analyze it.
         # To speed it up, we'll try ThreadPoolExecutor, but user might need to ensure LM Studio supports parallel requests.
         
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            console=console
-        ) as progress:
-            chunk_task = progress.add_task("Processing Chunks...", total=math.ceil(total_pages/chunk_size))
-            
-            for i in range(0, total_pages, chunk_size):
-                chunk = "\n".join(self.pdf_pages[i : i + chunk_size])
-                chunk_desc = f"Pages {i+1} to {min(i + chunk_size, total_pages)}"
+        from ui_core import TelemetryDisplay
+        telemetry = TelemetryDisplay()
+        
+        with telemetry:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TaskProgressColumn(),
+                console=console
+            ) as progress:
+                chunk_task = progress.add_task("Processing Chunks...", total=math.ceil(total_pages/chunk_size))
                 
-                with ThreadPoolExecutor(max_workers=4) as executor:
-                    futures = {}
-                    for scholar in self.scholars:
-                        prior_research = "\n\n".join(scholar_notes[scholar.name])
-                        prior_context_header = (
-                            f"### YOUR PRIOR RESEARCH SO FAR ###\n"
-                            f"{prior_research[-30000:]}\n\n"
-                            f"### CURRENT SECTION TO ANALYSE ###\n"
-                        ) if prior_research else ""
-                        
-                        full_context = prior_context_header + chunk
-                        prompt = (
-                            f"PROMPT: {self.user_prompt}\n"
-                            f"SECTION: {chunk_desc}\n"
-                            f"TASK: Perform your specialized disciplinary analysis on this section. "
-                            f"Maintain continuity with your prior research."
-                        )
-                        futures[executor.submit(scholar.chat, prompt, context=full_context[:100000])] = scholar.name
-                        
-                    for future in as_completed(futures):
-                        name = futures[future]
-                        res = future.result()
-                        scholar_notes[name].append(f"## {chunk_desc}\n\n{res}")
-                
-                progress.update(chunk_task, advance=1)
+                for i in range(0, total_pages, chunk_size):
+                    chunk = "\n".join(self.pdf_pages[i : i + chunk_size])
+                    chunk_desc = f"Pages {i+1} to {min(i + chunk_size, total_pages)}"
+                    
+                    with ThreadPoolExecutor(max_workers=len(self.scholars)) as executor:
+                        futures = {}
+                        for scholar in self.scholars:
+                            def make_on_update(s_name):
+                                return lambda data: (telemetry.update(f"Research: {s_name}", data), telemetry.refresh())
+
+                            prior_research = "\n\n".join(scholar_notes[scholar.name])
+                            prior_context_header = (
+                                f"### YOUR PRIOR RESEARCH SO FAR ###\n"
+                                f"{prior_research[-40000:]}\n\n"
+                                f"### CURRENT SECTION TO ANALYSE ###\n"
+                            ) if prior_research else ""
+                            
+                            full_context = prior_context_header + chunk
+                            prompt = (
+                                f"PROMPT: {self.user_prompt}\n"
+                                f"SECTION: {chunk_desc}\n"
+                                f"TASK: Perform an EXHAUSTIVE disciplinary analysis. "
+                                f"You MUST write at least 1,500 words for this section. "
+                                f"Document every nuance, character shift, and philosophical contradiction. "
+                                f"Maintain absolute continuity with your prior research above."
+                            )
+                            futures[executor.submit(scholar.chat, prompt, context=full_context[:120000], on_update=make_on_update(scholar.name))] = scholar.name
+                            
+                        for future in as_completed(futures):
+                            name = futures[future]
+                            res = future.result()
+                            scholar_notes[name].append(f"## {chunk_desc}\n\n{res}")
+                            telemetry.update(f"Research: {name}", {"status": "[green]Done[/green]", "tps": 0, "tokens": 0})
+                            telemetry.refresh()
+                    
+                    progress.update(chunk_task, advance=1)
 
         # Log individual scholar notes
         compiled_notes = {}
@@ -221,11 +232,11 @@ class DeepResearchWorkflow:
                 telemetry.refresh()
 
             section_prompt = (
-                f"YOU ARE WRITING A CHAPTER FOR A 20,000 WORD MASTER THESIS.\n"
+                f"YOU ARE WRITING A CHAPTER FOR A 25,000 WORD MASTER THESIS.\n"
                 f"CURRENT CHAPTER: {chapter_title}\n\n"
-                "TASK: Write a 1,500-2,000 word analytical deep-dive for this chapter. "
-                "You MUST weave together the perspectives of the 4 PhDs (Hart, Reid, Tariq, Rostova), "
-                "explicitly noting where they agree, disagree, or provide complementary nuance. "
+                "TASK: Write a 2,000-2,500 word analytical deep-dive for this chapter. "
+                "You MUST weave together the perspectives of the 4 PhDs (Hart, Reid, Tariq, Rostova) in extreme detail. "
+                "Do NOT rush the analysis. Expand on every philosophical nuance. "
                 "Maintain extreme information density and academic rigor."
             )
             section_content = self.chief_scholar.chat(section_prompt, context=all_research_and_debate[:120000], on_update=on_update)

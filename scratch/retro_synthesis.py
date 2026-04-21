@@ -89,8 +89,10 @@ def run_retro_synthesis(log_dir):
 
         section_prompt = (
             f"CHAPTER: {chapter_title}\n\n"
-            "TASK: Write a 1,500-2,000 word analytical deep-dive. Compare the 4 scholars explicitly. "
-            "Maintain extreme academic rigor."
+            "TASK: Write a 2,000-2,500 word analytical deep-dive for this specific chapter. "
+            "You MUST expand on every detail. Compare the 4 scholars (Hart, Reid, Tariq, Rostova) in extreme detail. "
+            "Do NOT summarize. Provide exhaustive analysis. Use academic rhetoric to maintain length and depth. "
+            "Maintain extreme information density."
         )
         content = chief_scholar.chat(section_prompt, context=all_research_and_debate[:120000], on_update=on_update)
         telemetry.update(f"Ch {idx+1}: {chapter_title[:20]}...", {"status": "[bold green]Done[/bold green]", "tps": 0, "tokens": 0})
