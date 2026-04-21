@@ -106,6 +106,7 @@ class ShortWriterWorkflow:
         writer_type: str,
         written_sections: List[str],
         remaining_words: int,
+        telemetry=None
     ) -> str:
         if remaining_words <= 50:
             return ""
@@ -171,7 +172,7 @@ class ShortWriterWorkflow:
     # Phase 2 — Parallel dual-writer composition
     # ------------------------------------------------------------------
 
-    def _generate_draft(self, outline: str, writer_agent, writer_type: str) -> str:
+    def _generate_draft(self, outline: str, writer_agent, writer_type: str, telemetry=None) -> str:
         """Generate a complete draft using the given writer agent."""
         num_sections = max(2, math.ceil(self.target_words / WORDS_PER_SECTION))
         words_per_section = math.ceil(self.target_words / num_sections)
@@ -238,7 +239,7 @@ class ShortWriterWorkflow:
         if total_words < self.target_words:
             remaining = self.target_words - total_words
             continuation = self._generate_additional_section(
-                outline, writer_agent, writer_type, written_sections, remaining
+                outline, writer_agent, writer_type, written_sections, remaining, telemetry
             )
             if continuation.strip():
                 written_sections.append(continuation)
