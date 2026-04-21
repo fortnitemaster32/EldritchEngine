@@ -55,17 +55,18 @@ def run_settings_mode():
             table.add_column("File in prompts/", style="green")
             
             registry = [
-                ("Deep Research", "PhDs", "phd_philosopher.md, etc."),
+                ("Deep Research", "PhDs", "phd_philosopher.md, phd_psychologist.md, phd_literary.md, phd_sociologist.md"),
                 ("Deep Research", "Synthesis", "chief_scholar.md"),
                 ("Essay Mode", "Architect", "architect.md"),
-                ("Essay Mode", "Writers", "writer_visionary.md, etc."),
-                ("Essay Mode", "Literacy", "lexicographer.md, etc."),
+                ("Essay Mode", "Writers", "writer_visionary.md, writer_analyst.md, writer_challenger.md, writer_storyteller.md"),
+                ("Essay Mode", "Editors", "editor_sculptor.md, editor_finisher.md"),
+                ("Essay Mode", "Literacy", "lexicographer.md, precisionist.md"),
                 ("Short Writing", "Planner", "short_planner.md"),
-                ("Short Writing", "Writers", "short_writer_creative.md, etc."),
+                ("Short Writing", "Writers", "short_writer_creative.md, short_writer_logical.md"),
                 ("Book Mode", "Architect", "book_planner.md"),
                 ("Book Mode", "Auditor", "structural_auditor.md"),
-                ("Book Mode", "Chapter Team", "iterative_writer_alpha.md, etc."),
-                ("Book Mode", "Utility", "book_condenser.md, citation_manager.md"),
+                ("Book Mode", "Chapter Team", "iterative_writer_alpha.md, iterative_writer_beta.md, iterative_editor.md, iterative_critic.md"),
+                ("Book Mode", "Utility", "book_condenser.md, citation_manager.md, book_title_gen.md"),
             ]
             
             for w, a, f in registry:
