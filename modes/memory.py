@@ -69,18 +69,26 @@ def run_memory_mode(script_dir):
             
             console.print(Panel(f"Found [bold cyan]{len(unindexed)}[/bold cyan] unindexed research logs.", title="Deep Scan Results"))
             if questionary.confirm(f"Index all {len(unindexed)} files now?", default=True).ask():
+                import concurrent.futures
+                
                 success_count = 0
-                for full_path, rel_path in unindexed:
+                
+                def index_file(item):
+                    full_p, rel_p = item
                     try:
-                        with open(full_path, "r", encoding="utf-8") as fh:
+                        with open(full_p, "r", encoding="utf-8") as fh:
                             content = fh.read()
-                        if not content.strip(): continue
-                        
-                        # Add a tiny delay to be kind to LM Studio
-                        permanent_memory.memory.index_text(content, rel_path)
-                        success_count += 1
+                        if not content.strip(): return 0
+                        permanent_memory.memory.index_text(content, rel_p)
+                        return 1
                     except Exception as e:
-                        console.print(f"[red]Failed to index {rel_path}: {e}[/red]")
+                        console.print(f"[red]Failed to index {rel_p}: {e}[/red]")
+                        return 0
+
+                with console.status("[cyan]Mass Indexing in parallel...[/cyan]"):
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                        results = list(executor.map(index_file, unindexed))
+                        success_count = sum(results)
                 
                 console.print(f"[bold green]✓ Successfully indexed {success_count} files![/bold green]")
                 questionary.press_any_key_to_continue().ask()
