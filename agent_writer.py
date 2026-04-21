@@ -118,6 +118,31 @@ class LMStudioAgent:
                         console.print(f"[bold red]API Error:[/bold red] {e}")
                     raise e
 
+        # Shadow Logging for Forensics
+        try:
+            import inspect
+            frame = inspect.currentframe()
+            log_dir = None
+            while frame:
+                if 'self' in frame.f_locals and hasattr(frame.f_locals['self'], 'log_dir'):
+                    log_dir = frame.f_locals['self'].log_dir
+                    break
+                frame = frame.f_back
+            
+            if log_dir:
+                shadow_path = os.path.join(log_dir, "shadow_log.jsonl")
+                import json
+                with open(shadow_path, "a", encoding="utf-8") as f:
+                    log_entry = {
+                        "timestamp": datetime.now().isoformat(),
+                        "agent": self.name,
+                        "prompt": messages,
+                        "response": "".join(full_response)
+                    }
+                    f.write(json.dumps(log_entry) + "\n")
+        except:
+            pass 
+
         return "".join(full_response)
 
     @staticmethod
@@ -236,5 +261,15 @@ class AgenticWorkflow:
         def update_e(data):
             if telemetry: telemetry.update("The Editor", data); telemetry.refresh()
         final = self.editor.chat("Polish the draft.", context=full_draft, on_update=update_e)
-        self._log_step("4_Final", final)
-        return final
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_file = os.path.join(SCRIPT_DIR, "outputs", f"essay_work_{timestamp}.md")
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(final)
+
+        return {
+            "type": "single",
+            "output_file": output_file,
+            "title": self.user_prompt,
+        }
