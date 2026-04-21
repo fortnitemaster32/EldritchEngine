@@ -91,7 +91,7 @@ class ShortWriterWorkflow:
         with open(path, "w", encoding="utf-8") as fh:
             fh.write(f"# {name}\n\n{content}")
 
-    def _research_context(self, max_chars: int = 50000) -> str:
+    def _research_context(self, max_chars: int = 200000) -> str:
         if self.research_notes:
             return f"### RESEARCH NOTES ###\n{self.research_notes[:max_chars]}"
         return ""
@@ -138,7 +138,7 @@ class ShortWriterWorkflow:
 
         continuation_text = writer_agent.chat(
             prompt,
-            context=self._research_context(max_chars=30000),
+            context=self._research_context(),
             on_update=on_update
         )
         return continuation_text
@@ -228,7 +228,7 @@ class ShortWriterWorkflow:
 
                 section_text = writer_agent.chat(
                     prompt,
-                    context=self._research_context(max_chars=30000),
+                    context=self._research_context(),
                     on_update=on_update
                 )
                 written_sections.append(section_text)

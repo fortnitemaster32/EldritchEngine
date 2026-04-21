@@ -60,7 +60,7 @@ class LMStudioAgent:
         full_response = []
 
         if on_update:
-            on_update({"status": "Processing Prompt...", "tps": 0, "tokens": 0})
+            on_update({"status": f"Ingesting {estimated_tokens}t...", "tps": 0, "tokens": 0})
 
         try:
             response = self.client.chat.completions.create(
@@ -206,7 +206,7 @@ class AgenticWorkflow:
         for i, s in enumerate(sections, 1):
             def update_a(data):
                 if telemetry: telemetry.update(f"Author (Sec {i})", data); telemetry.refresh()
-            p = self.author.chat(f"Write section: {s}", context=f"Plan: {blueprint}\nResearch: {self.research_notes[:30000]}", on_update=update_a)
+            p = self.author.chat(f"Write section: {s}", context=f"Plan: {blueprint}\nResearch: {self.research_notes[:150000]}", on_update=update_a)
             parts.append(p)
             
         full_draft = "\n\n".join(parts)
