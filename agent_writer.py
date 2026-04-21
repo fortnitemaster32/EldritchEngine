@@ -28,7 +28,7 @@ class LMStudioAgent:
         self.name = name
         self.role = role
         self.system_prompt = system_prompt
-        self.client = OpenAI(base_url=base_url, api_key="lm-studio")
+        self.client = OpenAI(base_url=base_url, api_key="lm-studio", timeout=None)
         self.model = "local-model"
 
     def chat(self, user_input: str, context: str = "", history: List[Dict] = None, on_update: callable = None) -> str:
@@ -51,6 +51,8 @@ class LMStudioAgent:
             allowed_chars = (max_context - 2000) * 4
             context = context[:allowed_chars]
             full_content = f"### PDF CONTEXT (TRUNCATED) ###\n{context}\n\n### TASK ###\n{user_input}"
+            # Re-estimate for UI accuracy
+            estimated_tokens = (len(self.system_prompt) + len(full_content)) // 4
         
         messages.append({"role": "user", "content": full_content})
         
@@ -67,7 +69,8 @@ class LMStudioAgent:
                 model=self.model,
                 messages=messages,
                 temperature=0.7,
-                stream=True
+                stream=True,
+                timeout=None # Disable timeout for massive prompts
             )
 
             for chunk in response:
