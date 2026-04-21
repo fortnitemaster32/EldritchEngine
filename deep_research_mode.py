@@ -211,9 +211,15 @@ class DeepResearchWorkflow:
         # --- Phase 4: Sectional Synthesis (Long-Form Drafting) ---
         console.print(f"\n[bold green]Phase 4: Sectional Synthesis ({len(chapters)} Chapters, 2 Parallely)...[/bold green]")
         
+        from ui_core import TelemetryDisplay
+        telemetry = TelemetryDisplay()
         final_paper_sections = [None] * len(chapters)
         
         def draft_chapter(idx, chapter_title):
+            def on_update(data):
+                telemetry.update(f"Ch {idx+1}: {chapter_title[:20]}...", data)
+                telemetry.refresh()
+
             section_prompt = (
                 f"YOU ARE WRITING A CHAPTER FOR A 20,000 WORD MASTER THESIS.\n"
                 f"CURRENT CHAPTER: {chapter_title}\n\n"
@@ -222,16 +228,12 @@ class DeepResearchWorkflow:
                 "explicitly noting where they agree, disagree, or provide complementary nuance. "
                 "Maintain extreme information density and academic rigor."
             )
-            section_content = self.chief_scholar.chat(section_prompt, context=all_research_and_debate[:120000])
+            section_content = self.chief_scholar.chat(section_prompt, context=all_research_and_debate[:120000], on_update=on_update)
+            telemetry.update(f"Ch {idx+1}: {chapter_title[:20]}...", {"status": "[bold green]Done[/bold green]", "tps": 0, "tokens": 0})
+            telemetry.refresh()
             return idx, f"# {chapter_title}\n\n{section_content}"
 
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console
-        ) as progress:
-            overall_task = progress.add_task("[bold gold1]Drafting Chapters...[/bold gold1]", total=len(chapters))
-            
+        with telemetry:
             max_workers = config_manager.get_setting("max_concurrency")
             console.print(f"  [dim]Using {max_workers} parallel workers...[/dim]")
             with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -243,8 +245,6 @@ class DeepResearchWorkflow:
                 for future in concurrent.futures.as_completed(future_to_chapter):
                     idx, content = future.result()
                     final_paper_sections[idx] = content
-                    progress.update(overall_task, advance=1)
-                    console.print(f"  [green]✓ Completed:[/green] {chapters[idx]}")
 
         final_paper = "\n\n---\n\n".join(final_paper_sections)
         output_file = os.path.join(self.log_dir, "5_Final_Master_Thesis.md")

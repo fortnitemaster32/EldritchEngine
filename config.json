@@ -1,0 +1,4 @@
+{
+    "max_concurrency": 2,
+    "lm_studio_url": "http://localhost:1234/v1"
+}

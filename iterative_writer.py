@@ -61,15 +61,17 @@ class IterativeWriterWorkflow:
         with open(self.output_file, "w", encoding="utf-8") as f:
             f.write(content.strip())
 
-    def run(self):
+    def run(self, telemetry=None):
         console.print(Panel.fit(
             f"🔄 [bold gold1]Iterative Mode[/bold gold1]\n"
             f"[dim]Live editing: {self.output_file}[/dim]",
             border_style="gold1"
         ))
 
-        # Step 1: Thesis & Outline
-        with console.status("[cyan]The Planner is generating the Thesis and Outline...[/cyan]"):
+        def on_plan_update(data):
+            if telemetry: telemetry.update("The Planner", data); telemetry.refresh()
+
+        with telemetry if telemetry else console.status("[cyan]Planning...[/cyan]"):
             plan_prompt = (
                 f"Topic/Prompt: {self.user_prompt}\n\n"
                 "Create a detailed, paragraph-by-paragraph outline for this essay. "
@@ -78,7 +80,7 @@ class IterativeWriterWorkflow:
                 + "CRITICAL: You MUST wrap the detailed plan for EACH individual paragraph entirely inside a <paragraph_plan>...</paragraph_plan> XML block. Do not put multiple paragraphs in one block.\n"
                 "Include an Intro, several Body paragraphs, and a Conclusion."
             )
-            outline_res = self.planner.chat(plan_prompt, context=self.research_notes[:80000])
+            outline_res = self.planner.chat(plan_prompt, context=self.research_notes[:80000], on_update=on_plan_update)
         
         console.print(Panel(Markdown(outline_res), title="Essay Thesis & Outline", border_style="cyan"))
         
@@ -171,10 +173,15 @@ class IterativeWriterWorkflow:
                         f"{style_instruction}{lexicon_instruction}"
                     )
                     
-                    with console.status("[green]Phase 1/2: 2 Writers drafting in parallel...[/green]"):
+                    def on_update_a(data):
+                        if telemetry: telemetry.update("Writer Alpha", data); telemetry.refresh()
+                    def on_update_b(data):
+                        if telemetry: telemetry.update("Writer Beta", data); telemetry.refresh()
+
+                    with telemetry if telemetry else console.status("[green]Drafting...[/green]"):
                         with ThreadPoolExecutor(max_workers=2) as executor:
-                            future_a = executor.submit(self.writer_a.chat, write_prompt, context=self.research_notes[:80000])
-                            future_b = executor.submit(self.writer_b.chat, write_prompt, context=self.research_notes[:80000])
+                            future_a = executor.submit(self.writer_a.chat, write_prompt, context=self.research_notes[:80000], on_update=on_update_a)
+                            future_b = executor.submit(self.writer_b.chat, write_prompt, context=self.research_notes[:80000], on_update=on_update_b)
                             draft_a = future_a.result()
                             draft_b = future_b.result()
                         
@@ -187,8 +194,11 @@ class IterativeWriterWorkflow:
                         "Ensure academic rigor, seamless flow, and dense structure. Output ONLY the finalized paragraph text. Do NOT output meta-commentary."
                         f"{style_instruction}{lexicon_instruction}"
                     )
-                    with console.status("[magenta]Phase 2/2: The Editor is combining and polishing...[/magenta]"):
-                        candidate_para = self.editor.chat(edit_prompt, context=self.research_notes[:80000])
+                    def on_edit_update(data):
+                        if telemetry: telemetry.update("The Editor", data); telemetry.refresh()
+
+                    with telemetry if telemetry else console.status("[magenta]Combining...[/magenta]"):
+                        candidate_para = self.editor.chat(edit_prompt, context=self.research_notes[:80000], on_update=on_edit_update)
 
                 elif action == "Redo with instructions":
                     revise_prompt = (

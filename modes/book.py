@@ -25,12 +25,16 @@ def run_book_mode(script_dir):
     if resume_sessions:
         action = questionary.select("Resume a session or start new?", choices=["Start New Book", "Resume Session"]).ask()
     
+    from ui_core import TelemetryDisplay
+    telemetry = TelemetryDisplay()
+
     if action == "Resume Session":
         session_path = questionary.select("Select session to resume:", choices=resume_sessions).ask()
         if not session_path: return
         clear_screen()
-        wf = book_writer.BookWriterWorkflow("", "", resume_session_path=session_path)
-        result = wf.run()
+        wf = book_writer.BookWriterWorkflow("", "", resume_dir=session_path)
+        with telemetry:
+            result = wf.run(telemetry=telemetry)
         offer_pdf_export(result, script_dir)
         return
 
@@ -57,7 +61,9 @@ def run_book_mode(script_dir):
     clear_screen()
     try:
         wf = book_writer.BookWriterWorkflow(user_prompt, research_notes, book_title=book_title, book_style=style_choice, auto_accept=auto_accept)
-        result = wf.run()
+        with telemetry:
+            result = wf.run(telemetry=telemetry)
         offer_pdf_export(result, script_dir)
+
     except Exception as exc:
         console.print(f"\n[bold red]ERROR:[/bold red] {exc}")

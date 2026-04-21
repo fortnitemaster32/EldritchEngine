@@ -9,7 +9,58 @@ import research_cache
 import agent_writer
 from pdf_exporter import export_book_dir_to_pdf, export_markdown_file_to_pdf
 
+from rich.live import Live
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+import time
+
 console = Console()
+
+class TelemetryDisplay:
+    def __init__(self):
+        self.stats = {} # name -> {status, tps, tokens}
+        self.live = None
+
+    def _make_table(self):
+        table = Table(box=None, padding=(0, 1))
+        table.add_column("Agent / Task", style="cyan", width=30)
+        table.add_column("Status", style="magenta", width=20)
+        table.add_column("Speed", style="green", justify="right", width=12)
+        table.add_column("Tokens", style="yellow", justify="right", width=10)
+        
+        for name, data in self.stats.items():
+            tps_str = f"{data['tps']:.1f} t/s" if data['tps'] > 0 else "---"
+            
+            status_display = data['status']
+            if "Processing Prompt" in status_display:
+                # Simulate a moving bar for prompt processing
+                cycle = int(time.time() * 4) % 10
+                bar = ["-"] * 10
+                bar[cycle] = "█"
+                status_display = f"[bold yellow]Ingesting[/bold yellow] {''.join(bar)}"
+            
+            table.add_row(
+                name,
+                status_display,
+                tps_str,
+                str(data['tokens'])
+            )
+        return Panel(table, title="[bold gold1]Live Telemetry[/bold gold1]", border_style="gold1")
+
+    def update(self, name, data):
+        self.stats[name] = data
+
+    def __enter__(self):
+        self.live = Live(self._make_table(), console=console, refresh_per_second=4)
+        self.live.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.live:
+            self.live.stop()
+
+    def refresh(self):
+        if self.live:
+            self.live.update(self._make_table())
 
 GENRES = [
     "Article / Essay",

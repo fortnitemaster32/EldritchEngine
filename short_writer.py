@@ -130,9 +130,15 @@ class ShortWriterWorkflow:
             "Do NOT trail off or add meta-commentary."
         )
 
+        def on_update(data):
+            if telemetry:
+                telemetry.update(f"Add Section ({writer_type})", data)
+                telemetry.refresh()
+
         continuation_text = writer_agent.chat(
             prompt,
-            context=self._research_context(max_chars=30000)
+            context=self._research_context(max_chars=30000),
+            on_update=on_update
         )
         return continuation_text
 
@@ -140,21 +146,24 @@ class ShortWriterWorkflow:
     # Phase 1 — Planning
     # ------------------------------------------------------------------
 
-    def plan(self) -> str:
+    def plan(self, telemetry=None) -> str:
         console.print("\n[bold cyan]The Planner is drafting the outline...[/bold cyan]")
-        with Progress(SpinnerColumn(), TextColumn("{task.description}"),
-                      console=console) as prog:
-            prog.add_task("[cyan]Planning...", total=None)
-            outline = self.planner.chat(
-                (
-                    f"Genre: {self.genre}\n"
-                    f"Prompt: {self.user_prompt}\n"
-                    f"Target length: approximately {self.target_words} words\n\n"
-                    "Task: Create a detailed section-by-section outline. "
-                    "Label each section with its purpose and an approximate word count."
-                ),
-                context=self._research_context()
-            )
+        def on_update(data):
+            if telemetry:
+                telemetry.update("The Planner", data)
+                telemetry.refresh()
+        
+        outline = self.planner.chat(
+            (
+                f"Genre: {self.genre}\n"
+                f"Prompt: {self.user_prompt}\n"
+                f"Target length: approximately {self.target_words} words\n\n"
+                "Task: Create a detailed section-by-section outline. "
+                "Label each section with its purpose and an approximate word count."
+            ),
+            context=self._research_context(),
+            on_update=on_update
+        )
         self._log_step("0_Outline", outline)
         return outline
 
@@ -186,6 +195,11 @@ class ShortWriterWorkflow:
                 is_first = i == 0
                 is_last  = i == num_sections - 1
 
+                def on_update(data):
+                    if telemetry:
+                        telemetry.update(f"{writer_agent.name} (S{i+1})", data)
+                        telemetry.refresh()
+
                 # Rolling context — last N words already written
                 rolling = ""
                 if written_sections:
@@ -209,28 +223,15 @@ class ShortWriterWorkflow:
                     )
                     + f"TASK: Write the {position}. "
                     + f"Aim for approximately {words_per_section} words. "
-                    + (
-                        "IMPORTANT: This is the FINAL section — deliver a strong, "
-                        "conclusive ending. Do not trail off."
-                        if is_last else
-                        "Do NOT wrap up or conclude the piece yet — more sections follow."
-                    )
                 )
 
                 section_text = writer_agent.chat(
                     prompt,
-                    context=self._research_context(max_chars=30000)
+                    context=self._research_context(max_chars=30000),
+                    on_update=on_update
                 )
                 written_sections.append(section_text)
-
-                prog.update(
-                    task,
-                    advance=1,
-                    description=(
-                        f"Writing section {i + 2} of {num_sections} ({writer_type})..."
-                        if not is_last else f"Writing complete ✓ ({writer_type})"
-                    )
-                )
+                if telemetry: telemetry.update(f"{writer_agent.name} (S{i+1})", {"status": "[green]Done[/green]", "tps": 0, "tokens": 0})
 
         full_draft = "\n\n".join(written_sections)
         total_words = self._measure_word_count(full_draft)
@@ -245,7 +246,7 @@ class ShortWriterWorkflow:
 
         return full_draft
 
-    def write(self, outline: str) -> tuple[str, str]:
+    def write(self, outline: str, telemetry=None) -> tuple[str, str]:
         """Generate two parallel drafts: one creative, one logical."""
         console.print(
             f"\n[bold yellow]Two Writers are now composing in parallel...[/bold yellow]"
@@ -253,10 +254,10 @@ class ShortWriterWorkflow:
 
         with ThreadPoolExecutor(max_workers=2) as executor:
             creative_future = executor.submit(
-                self._generate_draft, outline, self.writer_creative, "creative"
+                self._generate_draft, outline, self.writer_creative, "creative", telemetry
             )
             logical_future = executor.submit(
-                self._generate_draft, outline, self.writer_logical, "logical"
+                self._generate_draft, outline, self.writer_logical, "logical", telemetry
             )
 
             creative_draft = creative_future.result()
@@ -271,24 +272,23 @@ class ShortWriterWorkflow:
     # Phase 3 — Merge & polish
     # ------------------------------------------------------------------
 
-    def edit(self, creative_draft: str, logical_draft: str, outline: str) -> str:
+    def edit(self, creative_draft: str, logical_draft: str, outline: str, telemetry=None) -> str:
         console.print("\n[bold magenta]The Editor is merging and polishing...[/bold magenta]")
-        with Progress(SpinnerColumn(), TextColumn("{task.description}"),
-                      console=console) as prog:
-            prog.add_task("[magenta]Editing...", total=None)
-            final = self.editor.chat(
-                (
-                    f"ORIGINAL OUTLINE:\n{outline}\n\n"
-                    f"CREATIVE DRAFT:\n{creative_draft}\n\n"
-                    f"LOGICAL DRAFT:\n{logical_draft}\n\n"
-                    "Task: Merge the best parts of both drafts into one final, publication-ready piece. "
-                    "Keep the strongest imagery, emotional momentum, and bold turns of phrase from the Creative Writer. "
-                    "Maintain the clarity, logical flow, and structural integrity from the Logical Writer. "
-                    "Fix transitions, sharpen the opening and closing, eliminate redundancy. "
-                    "Do NOT significantly shorten the piece. Preserve the target length and richness; if you make edits, keep the final output near the requested word count rather than cutting it dramatically."
-                ),
-                context=f"Genre: {self.genre} | Target: ~{self.target_words} words\n{self._research_context(max_chars=30000)}"
-            )
+        def on_update(data):
+            if telemetry:
+                telemetry.update("The Editor", data)
+                telemetry.refresh()
+        
+        final = self.editor.chat(
+            (
+                f"ORIGINAL OUTLINE:\n{outline}\n\n"
+                f"CREATIVE DRAFT:\n{creative_draft}\n\n"
+                f"LOGICAL DRAFT:\n{logical_draft}\n\n"
+                "Task: Merge the best parts of both drafts into one final piece."
+            ),
+            context=f"Genre: {self.genre} | Target: ~{self.target_words} words\n{self._research_context(max_chars=30000)}",
+            on_update=on_update
+        )
         self._log_step("2_Final", final)
         return final
 
@@ -296,22 +296,22 @@ class ShortWriterWorkflow:
     # Orchestrator
     # ------------------------------------------------------------------
 
-    def run(self) -> str:
+    def run(self, telemetry=None) -> str:
         console.print(Panel.fit(
             f"✍️  [bold gold1]Short Writing Mode[/bold gold1]\n"
             f"[dim]Genre: {self.genre} | Target: ~{self.target_words} words[/dim]",
             border_style="gold1"
         ))
 
-        outline = self.plan()
+        outline = self.plan(telemetry=telemetry)
         console.print(Panel(
             Markdown(outline),
             title="[bold cyan]Outline[/bold cyan]",
             border_style="cyan"
         ))
 
-        creative_draft, logical_draft = self.write(outline)
-        final = self.edit(creative_draft, logical_draft, outline)
+        creative_draft, logical_draft = self.write(outline, telemetry=telemetry)
+        final = self.edit(creative_draft, logical_draft, outline, telemetry=telemetry)
 
         # Save output
         os.makedirs(os.path.join(SCRIPT_DIR, "outputs"), exist_ok=True)

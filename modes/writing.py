@@ -61,9 +61,14 @@ def run_essay_mode(script_dir):
     clear_screen()
     console.print("[bold gold1]Engine Starting...[/bold gold1]\n")
 
+    from ui_core import TelemetryDisplay
+    telemetry = TelemetryDisplay()
+
     try:
         workflow = agent_writer.AgenticWorkflow(selected_pdf, user_prompt, preloaded_research=research_notes, use_enricher=use_enricher)
-        workflow.conduct_research()
+        
+        with telemetry:
+            workflow.conduct_research(telemetry=telemetry)
 
         if not research_notes and workflow.research_notes:
             if questionary.confirm("Save research to cache?", default=True).ask():
@@ -72,13 +77,17 @@ def run_essay_mode(script_dir):
 
         selected_thesis = ""
         if use_thesis:
-            options = workflow.generate_thesis_options()
+            with telemetry:
+                options = workflow.generate_thesis_options(telemetry=telemetry)
             if options:
                 formatted = [questionary.Choice(title=f"{i+1}. {textwrap.fill(opt, 70)}\n", value=opt) for i, opt in enumerate(options)]
                 selected_thesis = questionary.select("Select a Thesis:", choices=formatted).ask() or ""
 
-        result = workflow.run(selected_thesis=selected_thesis, target_word_count=target_words)
+        with telemetry:
+            result = workflow.run(selected_thesis=selected_thesis, target_word_count=target_words, telemetry=telemetry)
+        
         offer_pdf_export(result, script_dir)
+
     except Exception as exc:
         console.print(f"\n[bold red]ERROR:[/bold red] {exc}")
 
@@ -102,9 +111,12 @@ def run_short_mode(script_dir):
 
     if not questionary.confirm("Start writing?").ask(): return
     clear_screen()
+    from ui_core import TelemetryDisplay
+    telemetry = TelemetryDisplay()
     try:
         wf = short_writer.ShortWriterWorkflow(user_prompt=user_prompt, genre=genre, target_words=length_choice, research_notes=research_notes)
-        result = wf.run()
+        with telemetry:
+            result = wf.run(telemetry=telemetry)
         offer_pdf_export(result, script_dir)
     except Exception as exc:
         console.print(f"\n[bold red]ERROR:[/bold red] {exc}")
@@ -125,15 +137,21 @@ def run_iterative_mode(script_dir):
     user_prompt = questionary.text("What do you want to write?").ask()
     if not user_prompt: return
 
+    from ui_core import TelemetryDisplay
+    telemetry = TelemetryDisplay()
+
     if not use_cache and selected_pdf:
         console.print("[bold gold1]Running research...[/bold gold1]")
         wf = agent_writer.AgenticWorkflow(selected_pdf, user_prompt)
-        wf.conduct_research()
+        with telemetry:
+            wf.conduct_research(telemetry=telemetry)
         research_notes = wf.research_notes
 
     try:
         wf = iterative_writer.IterativeWriterWorkflow(user_prompt, research_notes)
-        result = wf.run()
+        with telemetry:
+            result = wf.run(telemetry=telemetry)
         offer_pdf_export(result, script_dir)
+
     except Exception as exc:
         console.print(f"\n[bold red]ERROR:[/bold red] {exc}")

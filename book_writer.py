@@ -157,10 +157,15 @@ class BookWriterWorkflow:
     def _measure_word_count(self, text: str) -> int:
         return len(text.split())
 
-    def _generate_page_drafts(self, prompt: str) -> tuple[str, str]:
+    def _generate_page_drafts(self, prompt: str, telemetry=None) -> tuple[str, str]:
+        def update_a(data):
+            if telemetry: telemetry.update("Writer Alpha", data); telemetry.refresh()
+        def update_b(data):
+            if telemetry: telemetry.update("Writer Beta", data); telemetry.refresh()
+
         with ThreadPoolExecutor(max_workers=2) as executor:
-            future_a = executor.submit(self.writer_a.chat, prompt, self.research_notes[:20000])
-            future_b = executor.submit(self.writer_b.chat, prompt, self.research_notes[:20000])
+            future_a = executor.submit(self.writer_a.chat, prompt, self.research_notes[:20000], on_update=update_a)
+            future_b = executor.submit(self.writer_b.chat, prompt, self.research_notes[:20000], on_update=update_b)
             draft_a = future_a.result()
             draft_b = future_b.result()
         return draft_a, draft_b
@@ -215,7 +220,7 @@ class BookWriterWorkflow:
         pages = [p.strip() for p in "\n".join(content).split("\n\n") if p.strip()]
         return pages
 
-    def plan_book(self) -> dict:
+    def plan_book(self, telemetry=None) -> dict:
         """Phase 1: Comprehensive Planning"""
         console.print(Panel.fit(
             "📚 [bold gold1]Phase 1: Comprehensive Book Planning[/bold gold1]",
@@ -247,8 +252,10 @@ Output in clean Markdown format. This plan will serve as the foundation for a mu
             with open(outline_path, "r", encoding="utf-8") as f:
                 outline = f.read()
         else:
-            with console.status("[cyan]The Architect is planning the entire book...[/cyan]"):
-                outline = self.planner.chat(plan_prompt, context=self.research_notes[:50000])
+            def on_plan_update(data):
+                if telemetry: telemetry.update("The Architect", data); telemetry.refresh()
+            with telemetry if telemetry else console.status("[cyan]Planning...[/cyan]"):
+                outline = self.planner.chat(plan_prompt, context=self.research_notes[:50000], on_update=on_plan_update)
 
             self._log("0_Book_Outline.md", outline)
 
@@ -294,8 +301,10 @@ Crucial: Ensure extreme detail for every single page. Avoid repetitiveness by en
 Output in clean Markdown format.
 """
 
-            with console.status("[cyan]The Strategist is creating detailed topics and pages...[/cyan]"):
-                detailed_plan = self.strategist.chat(topic_plan_prompt, context=self.research_notes[:50000])
+            def on_topic_update(data):
+                if telemetry: telemetry.update("The Strategist", data); telemetry.refresh()
+            with telemetry if telemetry else console.status("[cyan]Drafting Detailed Plan...[/cyan]"):
+                detailed_plan = self.strategist.chat(topic_plan_prompt, context=self.research_notes[:50000], on_update=on_topic_update)
 
             self._log("1_Detailed_Topics.md", detailed_plan)
 
@@ -359,7 +368,7 @@ Output in clean Markdown format.
 
         return chapters
 
-    def condense_context(self, master_outline: str, previous_chapters: list, current_chapter: dict, page_index: int) -> str:
+    def condense_context(self, master_outline: str, previous_chapters: list, current_chapter: dict, page_index: int, telemetry=None) -> str:
         """Create condensed context for current page"""
         
         # Build a cumulative summary of the book so far to ensure consistency
@@ -370,78 +379,32 @@ Output in clean Markdown format.
             content_snippet = ch["content"][:1500] + "..." if len(ch["content"]) > 1500 else ch["content"]
             book_history += f"### {ch_title} SUMMARY ###\n{content_snippet}\n\n"
 
-        context_prompt = f"""
-Master Vision / Outline:
-{master_outline[:8000]}
+        context_prompt = f"OUTLINE:\n{master_outline[:5000]}\nPROGRESS:\n{book_history[-10000:]}\n\nTask: Condense situational context for Chapter: {current_chapter['title']}, Page: {page_index+1}"
 
-BOOK PROGRESS SO FAR:
-{book_history[-15000:]} 
+        def on_condense_update(data):
+            if telemetry: telemetry.update("The Condenser", data); telemetry.refresh()
 
-CURRENT CHAPTER: {current_chapter['title']}
-CURRENT PAGE GOAL: Page {page_index + 1} - {current_chapter['pages'][page_index] if page_index < len(current_chapter['pages']) else 'Continuation'}
-
-Task: Synthesize the 'Perfect Context' for the next writer. 
-Include:
-1. **The 'Thread'**: What exactly is happening right now?
-2. **Character Status**: What is [Character Name]'s current emotional and physical state?
-3. **Implicit Knowledge**: What are the latest developments that MUST be respected?
-4. **Anti-Repetition**: What themes or words have been overused recently that should be avoided?
-5. **Immediate Setup**: How did the previous page end?
-
-Keep it dense and extremely helpful for maintaining continuity and detail.
-"""
-
-        condensed = self.condenser.chat(context_prompt, context="")
+        condensed = self.condenser.chat(context_prompt, context="", on_update=on_condense_update)
         context_file = f"context_chapter_{len(previous_chapters)+1}_page_{page_index+1}.md"
         self._log(os.path.join("context_files", context_file), condensed)
         return condensed
 
-    def write_page(self, master_outline: str, condensed_context: str, chapter_title: str, page_desc: str, page_index: int, previous_pages: list) -> str:
+    def write_page(self, master_outline: str, condensed_context: str, chapter_title: str, page_desc: str, page_index: int, previous_pages: list, telemetry=None) -> str:
         """Write a single page"""
         rolling_context = "\n\n".join(previous_pages[-2:]) if previous_pages else "Start of chapter."
 
-        write_prompt = f"""
-MASTER VISION:
-{master_outline[:5000]}
+        write_prompt = f"CHAPTER: {chapter_title}\nPAGE {page_index+1} GOAL: {page_desc}\n\nCONTEXT:\n{condensed_context}\n\nPREVIOUS:\n{rolling_context}"
 
-SITUATIONAL CONTEXT:
-{condensed_context}
+        with telemetry if telemetry else console.status(f"[green]Writing Page {page_index + 1}...[/green]"):
+            draft_a, draft_b = self._generate_page_drafts(write_prompt, telemetry=telemetry)
 
-CHAPTER: {chapter_title}
-PAGE GOAL: Page {page_index + 1}: {page_desc}
+        edit_prompt = f"Draft A:\n{draft_a}\n\nDraft B:\n{draft_b}\n\nTask: Merge these into a single, polished page."
 
-PREVIOUS PAGES (Immediate Continuity):
-{rolling_context}
+        def on_edit_update(data):
+            if telemetry: telemetry.update("The Editor", data); telemetry.refresh()
 
-Task: Write this page with EXTREME DETAIL. 
-- Use evocative, sensory language.
-- Ensure character internal monologues or subtle physical cues are present.
-- Do NOT rush the plot. Expand the moments.
-- Target Length: 600-900 words.
-- Tone: {self.book_style}
-
-Crucial: Maintain absolute continuity with the SITUATIONAL CONTEXT and PREVIOUS PAGES. Avoid repetition of phrases or ideas from the context.
-"""
-
-        with console.status(f"[green]Writing Page {page_index + 1}...[/green]"):
-            draft_a, draft_b = self._generate_page_drafts(write_prompt)
-
-        edit_prompt = f"""
-Draft A:
-{draft_a}
-
-Draft B:
-{draft_b}
-
-Task: Combine the best elements from both drafts into a single, polished page. Maintain flow, eliminate redundancies, enhance prose quality.
-"""
-
-        with console.status("[magenta]Editing Page...[/magenta]"):
-            page_content = self.editor.chat(edit_prompt, context="")
-
-        if self._measure_word_count(page_content) < 650:
-            expand_prompt = f"The current page is too short. Expand this page to at least 650 words while retaining its structure, tone, and character arc. Do not change the meaning unnecessarily.\n\nCurrent Page:\n{page_content}"
-            page_content = self.editor.chat(expand_prompt, context="")
+        with telemetry if telemetry else console.status("[magenta]Editing...[/magenta]"):
+            page_content = self.editor.chat(edit_prompt, context="", on_update=on_edit_update)
 
         return page_content
 
@@ -465,7 +428,7 @@ Task: Combine the best elements from both drafts into a single, polished page. M
         return audited_text
 
 
-    def run(self):
+    def run(self, telemetry=None):
         console.print(Panel.fit(
             "📖 [bold gold1]Book Writing Mode[/bold gold1]\n"
             "[dim]Extensive planning → Page-by-page drafting with context condensation[/dim]",
@@ -473,7 +436,7 @@ Task: Combine the best elements from both drafts into a single, polished page. M
         ))
 
         if not self.chapters:
-            chapters = self.plan_book()
+            chapters = self.plan_book(telemetry=telemetry)
         else:
             chapters = self.chapters
             console.print(Panel.fit(
@@ -501,19 +464,22 @@ Task: Combine the best elements from both drafts into a single, polished page. M
                 while True:
                     console.print(f"[bold cyan]Page {p_idx + 1}: {page_desc[:50]}...[/bold cyan]")
                     if page_content is None:
+                        outline_text = open(os.path.join(self.log_dir, "0_Book_Outline.md")).read()
                         condensed_context = self.condense_context(
-                            open(os.path.join(self.log_dir, "0_Book_Outline.md")).read(),
+                            outline_text,
                             written_chapters,
                             chapter,
-                            p_idx
+                            p_idx,
+                            telemetry=telemetry
                         )
                         page_content = self.write_page(
-                            open(os.path.join(self.log_dir, "0_Book_Outline.md")).read(),
+                            outline_text,
                             condensed_context,
                             chapter['title'],
                             page_desc,
                             p_idx,
-                            chapter_content
+                            chapter_content,
+                            telemetry=telemetry
                         )
 
                     critique = self.review_page(

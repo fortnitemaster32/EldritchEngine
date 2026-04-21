@@ -78,24 +78,26 @@ def run_retro_synthesis(log_dir):
     max_workers = config_manager.get_setting("max_concurrency")
     console.print(f"\n[bold green]Writing {len(chapters)} Chapters ({max_workers} Parallely)...[/bold green]")
     
+    from ui_core import TelemetryDisplay
+    telemetry = TelemetryDisplay()
     sections = [None] * len(chapters)
     
     def draft_chapter(idx, chapter_title):
+        def on_update(data):
+            telemetry.update(f"Ch {idx+1}: {chapter_title[:20]}...", data)
+            telemetry.refresh()
+
         section_prompt = (
             f"CHAPTER: {chapter_title}\n\n"
             "TASK: Write a 1,500-2,000 word analytical deep-dive. Compare the 4 scholars explicitly. "
             "Maintain extreme academic rigor."
         )
-        content = chief_scholar.chat(section_prompt, context=all_research_and_debate[:120000])
+        content = chief_scholar.chat(section_prompt, context=all_research_and_debate[:120000], on_update=on_update)
+        telemetry.update(f"Ch {idx+1}: {chapter_title[:20]}...", {"status": "[bold green]Done[/bold green]", "tps": 0, "tokens": 0})
+        telemetry.refresh()
         return idx, f"# {chapter_title}\n\n{content}"
 
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=console
-    ) as progress:
-        overall_task = progress.add_task("[bold gold1]Drafting Chapters...[/bold gold1]", total=len(chapters))
-        
+    with telemetry:
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_chapter = {
                 executor.submit(draft_chapter, i, title): title 
@@ -105,8 +107,7 @@ def run_retro_synthesis(log_dir):
             for future in concurrent.futures.as_completed(future_to_chapter):
                 idx, content = future.result()
                 sections[idx] = content
-                progress.update(overall_task, advance=1)
-                console.print(f"  [green]✓ Completed:[/green] {chapters[idx]}")
+
 
     # 5. Save
     final_paper = "\n\n---\n\n".join(sections)
