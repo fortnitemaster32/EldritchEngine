@@ -90,7 +90,7 @@ class BookWriterWorkflow:
         )
         self.condenser = LMStudioAgent(
             "The Condenser", "Context Summarizer",
-            "You are a context condenser. Given a master outline and previous chapters, create a concise summary of only the most relevant information for writing the next page. Focus on character states, plot threads, and thematic elements that directly impact the upcoming page. Output in clean Markdown format."
+            self._load_prompt("book_condenser.md")
         )
         self.critic = LMStudioAgent(
             "The Critic", "Page Evaluator",
@@ -102,7 +102,7 @@ class BookWriterWorkflow:
         )
         self.title_agent = LMStudioAgent(
             "Title Generator", "Book Title Generator",
-            "You are a creative book title generator. Given a book idea and style, suggest five strong and memorable book titles. Output only a numbered list of titles, no explanation."
+            self._load_prompt("book_title_gen.md")
         )
 
     def _load_prompt(self, filename: str) -> str:

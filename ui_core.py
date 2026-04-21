@@ -153,8 +153,18 @@ def pick_font_theme() -> str:
     themes = list(FONT_THEMES.keys())
     return questionary.select("Select a font theme for the PDF:", choices=themes, default="Modern Sans").ask() or "Modern Sans"
 
-def offer_pdf_export(result: dict | None, script_dir):
-    if not result: return
+    # High-visibility output report
+    md_file = result.get("output_file")
+    log_dir = result.get("log_dir")
+    
+    report = []
+    if md_file and os.path.exists(md_file):
+        report.append(f"📄 [bold cyan]Master Markdown:[/bold cyan] {md_file}")
+    if log_dir and os.path.exists(log_dir):
+        report.append(f"📂 [bold cyan]Log Directory:[/bold cyan] {log_dir}")
+    
+    if report:
+        console.print(Panel("\n".join(report), title="[bold gold1]Output Location[/bold gold1]", border_style="gold1"))
 
     if not questionary.confirm("Export finished writing output to PDF?", default=True).ask():
         return

@@ -1,4 +1,5 @@
 {
-    "max_concurrency": 2,
-    "lm_studio_url": "http://localhost:1234/v1"
+    "max_concurrency": 4,
+    "lm_studio_url": "http://localhost:1234/v1",
+    "max_context_window": 131072
 }

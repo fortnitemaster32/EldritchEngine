@@ -74,6 +74,37 @@ For best performance, I recommend using the **Gemma 4 E2B IT** model in LM Studi
 - **Keyboard-Driven TUI**: Rapid mode and file selection.
 - **Decoupled Research Caching**: Analyze a massive PDF once, then write 10 different essays about it without re-reading the book.
 - **Deep Research Debate**: PhD agents literally debate each other's findings to eliminate blind spots.
+- **High-Volume Output**: Deep Research and Retro-Synthesis are tuned to produce 20,000+ word masterworks by forcing recursive depth.
+- **Context Guard**: Hardware-aware monitoring prevents LM Studio crashes by automatically truncating and warning when limits are reached.
 - **Parallel Processing**: Agents work in parallel to significantly reduce wait times.
 - **Rolling Context Windows**: Enables writing extremely long, coherent pieces without memory overflow.
+
+## 🗃️ Prompt Registry
+The following table maps agents/workflows to their external prompt files in `prompts/`. Edit these to change behavior.
+
+| Workflow | Agent | Prompt File |
+| :--- | :--- | :--- |
+| **Deep Research** | Philosophers | `phd_philosopher.md` |
+| | Psychologists | `phd_psychologist.md` |
+| | Literary Critics | `phd_literary.md` |
+| | Sociologists | `phd_sociologist.md` |
+| | Debate Phase | `debate_critique.md` |
+| | Synthesis | `chief_scholar.md` |
+| **Essay Mode** | The Architect | `architect.md` |
+| | The Writers | `writer_visionary.md`, `writer_analyst.md`, etc. |
+| | The Reviewers | `reviewer_stylist.md`, `reviewer_auditor.md` |
+| | The Editors | `editor_sculptor.md`, `editor_finisher.md` |
+| **Short Writing** | The Planner | `short_planner.md` |
+| | Creative Writer | `short_writer_creative.md` |
+| | Logical Writer | `short_writer_logical.md` |
+| | Editor | `short_editor.md` |
+| **Iterative** | Planner | `iterative_planner.md` |
+| | Writers | `iterative_writer_alpha.md`, `iterative_writer_beta.md` |
+| | Editor | `iterative_editor.md` |
+| **Book Mode** | Condenser | `book_condenser.md` |
+| | Title Gen | `book_title_gen.md` |
+| **Retro-Synth** | Synthesis | `chief_scholar_synthesis.md` |
+
+## ⚠️ Safety & Hardware
+If you encounter "Context Window Exceeded" errors, the engine will guide you through fixing them in LM Studio. You can also adjust the **Max Context Window** in the Settings menu to match your GPU's VRAM.
 

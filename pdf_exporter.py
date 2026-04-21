@@ -34,6 +34,19 @@ def _clean_inline_markdown(text: str) -> str:
     return text
 
 
+def _clean_engine_metadata(text: str) -> str:
+    """Removes internal XML-like tags and engine metadata blocks from final output."""
+    # Remove <critique>...</critique>
+    text = re.sub(r'<critique>.*?</critique>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    # Remove <paragraph_plan>...</paragraph_plan>
+    text = re.sub(r'<paragraph_plan>.*?</paragraph_plan>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    # Remove <editor_notes>...</editor_notes>
+    text = re.sub(r'<editor_notes>.*?</editor_notes>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    # Remove specific lines that look like engine breadcrumbs
+    text = re.sub(r'^\[CURRENTLY REVIEWING\].*$', '', text, flags=re.MULTILINE)
+    return text.strip()
+
+
 def _extract_title_from_markdown(markdown_text: str) -> str:
     for line in markdown_text.splitlines():
         match = re.match(r'^\s*#{1,2}\s+(.+)$', line)
@@ -43,6 +56,9 @@ def _extract_title_from_markdown(markdown_text: str) -> str:
 
 
 def _tokenize_markdown(markdown_text: str) -> list[dict]:
+    # First, clean the metadata
+    markdown_text = _clean_engine_metadata(markdown_text)
+    
     items = []
     in_code = False
     code_buffer = []

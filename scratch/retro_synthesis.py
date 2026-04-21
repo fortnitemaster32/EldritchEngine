@@ -48,9 +48,13 @@ def run_retro_synthesis(log_dir):
     user_prompt = questionary.text("What was the original research prompt?", default="General Analysis").ask()
     
     # 2. Setup Chief Scholar
+    prompt_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "prompts", "chief_scholar_synthesis.md")
+    with open(prompt_path, "r", encoding="utf-8") as f:
+        chief_scholar_prompt = f.read().strip()
+
     chief_scholar = agent_writer.LMStudioAgent(
         "Chief Scholar", "Synthesis Lead",
-        "You are the Chief Scholar. Your goal is to synthesize multiple conflicting disciplinary perspectives into a cohesive masterwork."
+        chief_scholar_prompt
     )
 
     # 3. Generate Outline

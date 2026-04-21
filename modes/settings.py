@@ -14,6 +14,7 @@ def run_settings_mode():
             questionary.Choice(f"Concurrency (Current: {config['max_concurrency']})", value="concurrency"),
             questionary.Choice(f"LM Studio URL (Current: {config['lm_studio_url']})", value="url"),
             questionary.Choice(f"Max Context Window (Current: {config.get('max_context_window', 32768)})", value="context"),
+            questionary.Choice("View Prompt Registry", value="prompts"),
             questionary.Choice("Back", value="back")
         ]
         
@@ -45,3 +46,31 @@ def run_settings_mode():
                 config_manager.save_config(config)
                 console.print(f"[green]✓ Set Max Context Window to {val}[/green]")
                 questionary.press_any_key_to_continue().ask()
+
+        elif choice == "prompts":
+            from rich.table import Table
+            table = Table(title="Prompt File Registry", border_style="gold1")
+            table.add_column("Workflow", style="cyan")
+            table.add_column("Agent/Phase", style="magenta")
+            table.add_column("File in prompts/", style="green")
+            
+            registry = [
+                ("Deep Research", "PhDs", "phd_philosopher.md, etc."),
+                ("Deep Research", "Debate", "debate_critique.md"),
+                ("Deep Research", "Synthesis", "chief_scholar.md"),
+                ("Essay Mode", "Architect", "architect.md"),
+                ("Essay Mode", "Writers", "writer_visionary.md, etc."),
+                ("Essay Mode", "Editors", "editor_sculptor.md, etc."),
+                ("Short Writing", "Planner", "short_planner.md"),
+                ("Short Writing", "Writers", "short_writer_creative.md, etc."),
+                ("Book Mode", "Condenser", "book_condenser.md"),
+                ("Retro-Synth", "Synthesis", "chief_scholar_synthesis.md"),
+            ]
+            
+            for w, a, f in registry:
+                table.add_row(w, a, f)
+            
+            clear_screen()
+            console.print(table)
+            console.print("\n[dim]Edit these files in the /prompts directory to change behavior.[/dim]")
+            questionary.press_any_key_to_continue().ask()
