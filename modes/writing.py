@@ -45,6 +45,14 @@ def run_essay_mode(script_dir):
     user_prompt = questionary.text("What essay do you want to write?").ask()
     if not user_prompt: return
 
+    import permanent_memory
+    if questionary.confirm("Connect to Permanent Memory vault?", default=True).ask():
+        with console.status("[cyan]Searching Permanent Memory...[/cyan]"):
+            memories = permanent_memory.memory.query(user_prompt)
+            if memories:
+                research_notes = f"{research_notes}\n\n### PERMANENT MEMORY RECALL ###\n{memories}"
+                console.print("[green]Connected to Permanent Memory. Relevant data retrieved.[/green]")
+
     use_thesis = questionary.confirm("Generate & select a thesis statement?", default=False).ask()
     use_enricher = questionary.confirm("Enable Enricher Mode?", default=False).ask()
 
@@ -99,6 +107,14 @@ def run_short_mode(script_dir):
 
     user_prompt = questionary.text("What do you want to write?").ask()
     if not user_prompt: return
+
+    import permanent_memory
+    if questionary.confirm("Connect to Permanent Memory vault?", default=True).ask():
+        with console.status("[cyan]Searching Permanent Memory...[/cyan]"):
+            memories = permanent_memory.memory.query(user_prompt)
+            if memories:
+                research_notes = f"{research_notes}\n\n### PERMANENT MEMORY RECALL ###\n{memories}"
+                console.print("[green]Connected to Permanent Memory. Relevant data retrieved.[/green]")
     genre = questionary.select("Select type:", choices=GENRES).ask()
     if not genre: return
 
@@ -136,6 +152,14 @@ def run_iterative_mode(script_dir):
 
     user_prompt = questionary.text("What do you want to write?").ask()
     if not user_prompt: return
+
+    import permanent_memory
+    if questionary.confirm("Connect to Permanent Memory vault?", default=True).ask():
+        with console.status("[cyan]Searching Permanent Memory...[/cyan]"):
+            memories = permanent_memory.memory.query(user_prompt)
+            if memories:
+                research_notes = f"{research_notes}\n\n### PERMANENT MEMORY RECALL ###\n{memories}"
+                console.print("[green]Connected to Permanent Memory. Relevant data retrieved.[/green]")
 
     from ui_core import TelemetryDisplay
     telemetry = TelemetryDisplay()

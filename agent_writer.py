@@ -181,17 +181,16 @@ class AgenticWorkflow:
                  preloaded_research: str = "", use_enricher: bool = False):
         self.pdf_path = pdf_path
         self.user_prompt = user_prompt
-        self.log_dir = os.path.join(SCRIPT_DIR, "logs", f"work_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
-        os.makedirs(self.log_dir, exist_ok=True)
-        
+        self.research_notes = preloaded_research
+        self.use_enricher = use_enricher
+
         self.pdf_pages = []
         self.image_count = 0
         if pdf_path:
             self.pdf_pages, self.image_count = self._extract_pdf_content(pdf_path, extract_images=extract_images)
-        
-        self.pdf_content = "\n".join(self.pdf_pages)
-        self.research_notes = preloaded_research
-        self.use_enricher = use_enricher
+
+        self.log_dir = os.path.join(SCRIPT_DIR, "logs", f"essay_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+        os.makedirs(self.log_dir, exist_ok=True)
 
         # High-Fidelity Agents (Synced with Registry)
         self.scholar = LMStudioAgent("The Scholar", "Lead Researcher", self._load_prompt("scholar.md"))

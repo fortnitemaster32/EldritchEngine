@@ -14,15 +14,18 @@ def main():
             print_header()
 
             mode = questionary.select(
-                "Select a mode:",
+                "Select a research pipeline:",
                 choices=[
+                    questionary.Separator("--- RESEARCH & ANALYSIS ---"),
                     questionary.Choice("🔬  Research Mode", value="research"),
                     questionary.Choice("🏛️   Deep Research", value="deep_research"),
+                    questionary.Separator("--- WRITING PIPELINES ---"),
                     questionary.Choice("📝  Essay Mode", value="essay"),
                     questionary.Choice("🔄  Iterative Mode", value="iterative"),
                     questionary.Choice("✍️   Short Writing", value="short"),
                     questionary.Choice("📖  Book Writing", value="book"),
-                    questionary.Choice("🛠️   Custom Workflow", value="custom"),
+                    questionary.Separator("--- SYSTEM ---"),
+                    questionary.Choice("🧠  Permanent Memory", value="memory"),
                     questionary.Choice("📜  History & Export", value="history"),
                     questionary.Choice("⚙️   Settings", value="settings"),
                     questionary.Choice("❌  Exit", value="exit"),
@@ -62,6 +65,9 @@ def main():
                 elif mode == "custom":
                     from modes.custom import run_custom_mode
                     run_custom_mode(SCRIPT_DIR)
+                elif mode == "memory":
+                    from modes.memory import run_memory_mode
+                    run_memory_mode(SCRIPT_DIR)
                 elif mode == "history":
                     from modes.history import run_history_mode
                     run_history_mode(SCRIPT_DIR)
