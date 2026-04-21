@@ -417,7 +417,7 @@ Output in clean Markdown format.
             if telemetry: telemetry.update("The Editor", data); telemetry.refresh()
 
         with telemetry if telemetry else console.status("[magenta]Editing...[/magenta]"):
-            page_content = self.editor.chat(edit_prompt, context="", on_update=on_edit_update)
+            page_content = self.editor.chat(edit_prompt, context=condensed_context, on_update=on_edit_update)
 
         return page_content
 
@@ -426,7 +426,7 @@ Output in clean Markdown format.
         critique_prompt = f"Page Content:\n{page_content}\n\nMaster Outline:\n{master_outline[:5000]}\n\nTask: Evaluate this page for plot consistency, character development, thematic coherence, and writing quality. Provide constructive feedback."
 
         with console.status("[yellow]Reviewing Page...[/yellow]"):
-            critique = self.critic.chat(critique_prompt, context="")
+            critique = self.critic.chat(critique_prompt, context=master_outline[:20000])
 
         console.print(Panel(page_content, title=f"Page {page_index + 1} Draft", border_style="green"))
         console.print(Panel(critique, title="Critique", border_style="yellow"))

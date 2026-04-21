@@ -256,11 +256,11 @@ class AgenticWorkflow:
             
         full_draft = "\n\n".join(parts)
         
-        # Editing
+        # Editing with Research Context
         console.print("\n[bold cyan]Phase 4: Editing...[/bold cyan]")
         def update_e(data):
             if telemetry: telemetry.update("The Editor", data); telemetry.refresh()
-        final = self.editor.chat("Polish the draft.", context=full_draft, on_update=update_e)
+        final = self.editor.chat("Polish the draft. Ensure it aligns perfectly with the research.", context=f"DRAFT:\n{full_draft}\n\nRESEARCH:\n{self.research_notes[:100000]}", on_update=update_e)
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_file = os.path.join(SCRIPT_DIR, "outputs", f"essay_work_{timestamp}.md")
