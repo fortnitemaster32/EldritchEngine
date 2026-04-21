@@ -84,25 +84,28 @@ The following table maps agents/workflows to their external prompt files in `pro
 
 | Workflow | Agent | Prompt File |
 | :--- | :--- | :--- |
-| **Deep Research** | Philosophers | `phd_philosopher.md` |
-| | Psychologists | `phd_psychologist.md` |
-| | Literary Critics | `phd_literary.md` |
-| | Sociologists | `phd_sociologist.md` |
+| **Deep Research** | Disciplinary PhDs | `phd_philosopher.md`, `phd_psychologist.md`, `phd_literary.md`, `phd_sociologist.md` |
 | | Debate Phase | `debate_critique.md` |
 | | Synthesis | `chief_scholar.md` |
 | **Essay Mode** | The Architect | `architect.md` |
-| | The Writers | `writer_visionary.md`, `writer_analyst.md`, etc. |
-| | The Reviewers | `reviewer_stylist.md`, `reviewer_auditor.md` |
-| | The Editors | `editor_sculptor.md`, `editor_finisher.md` |
+| | Core Writers | `writer_visionary.md`, `writer_analyst.md`, `writer_challenger.md`, `writer_storyteller.md` |
+| | Reviewers | `reviewer_stylist.md`, `reviewer_auditor.md` |
+| | Senior Editors | `editor_sculptor.md`, `editor_finisher.md` |
+| | Literacy Team | `lexicographer.md`, `precisionist.md` |
 | **Short Writing** | The Planner | `short_planner.md` |
-| | Creative Writer | `short_writer_creative.md` |
-| | Logical Writer | `short_writer_logical.md` |
-| | Editor | `short_editor.md` |
+| | Parallel Writers | `short_writer_creative.md`, `short_writer_logical.md` |
+| | Finishing Editor | `short_editor.md` |
 | **Iterative** | Planner | `iterative_planner.md` |
 | | Writers | `iterative_writer_alpha.md`, `iterative_writer_beta.md` |
-| | Editor | `iterative_editor.md` |
-| **Book Mode** | Condenser | `book_condenser.md` |
+| | Editor & Critic | `iterative_editor.md`, `iterative_critic.md` |
+| **Book Mode** | Book Architect | `book_planner.md` |
+| | Structural Auditor | `structural_auditor.md` |
+| | Chapter Writers | `iterative_writer_alpha.md`, `iterative_writer_beta.md` |
+| | Chapter Editor | `iterative_editor.md` |
+| | Chapter Critic | `iterative_critic.md` |
+| | Condenser | `book_condenser.md` |
 | | Title Gen | `book_title_gen.md` |
+| | Citations | `citation_manager.md` |
 
 ## ⚠️ Safety & Hardware
 If you encounter "Context Window Exceeded" errors, the engine will guide you through fixing them in LM Studio. You can also adjust the **Max Context Window** in the Settings menu to match your GPU's VRAM.

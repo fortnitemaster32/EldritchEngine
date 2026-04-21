@@ -56,14 +56,16 @@ def run_settings_mode():
             
             registry = [
                 ("Deep Research", "PhDs", "phd_philosopher.md, etc."),
-                ("Deep Research", "Debate", "debate_critique.md"),
                 ("Deep Research", "Synthesis", "chief_scholar.md"),
                 ("Essay Mode", "Architect", "architect.md"),
                 ("Essay Mode", "Writers", "writer_visionary.md, etc."),
-                ("Essay Mode", "Editors", "editor_sculptor.md, etc."),
+                ("Essay Mode", "Literacy", "lexicographer.md, etc."),
                 ("Short Writing", "Planner", "short_planner.md"),
                 ("Short Writing", "Writers", "short_writer_creative.md, etc."),
-                ("Book Mode", "Condenser", "book_condenser.md"),
+                ("Book Mode", "Architect", "book_planner.md"),
+                ("Book Mode", "Auditor", "structural_auditor.md"),
+                ("Book Mode", "Chapter Team", "iterative_writer_alpha.md, etc."),
+                ("Book Mode", "Utility", "book_condenser.md, citation_manager.md"),
             ]
             
             for w, a, f in registry:

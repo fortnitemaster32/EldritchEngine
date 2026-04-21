@@ -221,46 +221,58 @@ class BookWriterWorkflow:
         return pages
 
     def plan_book(self, telemetry=None) -> dict:
-        """Phase 1: Comprehensive Planning"""
+        """Phase 1: Comprehensive Planning with Structural Auditing"""
         console.print(Panel.fit(
-            "📚 [bold gold1]Phase 1: Comprehensive Book Planning[/bold gold1]",
+            "📚 [bold gold1]Phase 1: Comprehensive Book Planning & Structural Auditing[/bold gold1]",
             border_style="gold1"
         ))
 
-        plan_prompt = f"""
-Topic/Prompt: {self.user_prompt}
-Style/Atmosphere: {self.book_style}
-Book Title: {self.book_title or 'TBD'}
+        planner = LMStudioAgent("Book Architect", "Lead Planner", self._load_prompt("book_planner.md"))
+        auditor = LMStudioAgent("Structural Auditor", "Anti-Repetition Specialist", self._load_prompt("structural_auditor.md"))
 
-Task: Create a High-Level Master Vision and Outline for this book. 
-This is the 'Big Plan' phase. Focus on the overarching narrative arc, major character developments, and the core message/themes.
-
-Structure the Master Vision as follows:
-1. **Master Vision**: Core concept and 'hook'.
-2. **Detailed Synopsis**: 5-8 paragraphs covering the beginning, middle, and end.
-3. **Character Matrix**: Detailed profiles, hidden motivations, and complete arcs.
-4. **Structural Blueprint**:
-   - Divide the book into logical Parts/Acts.
-   - List Chapters under each Part with a 1-2 sentence summary of each.
-
-Output in clean Markdown format. This plan will serve as the foundation for a much more detailed sub-topic plan.
-"""
-
+        master_vision = ""
+        max_retries = 3
+        
         outline_path = os.path.join(self.log_dir, "0_Book_Outline.md")
         if os.path.exists(outline_path):
             console.print(f"[cyan]Loading existing outline from {outline_path}[/cyan]")
             with open(outline_path, "r", encoding="utf-8") as f:
-                outline = f.read()
+                master_vision = f.read()
         else:
-            def on_plan_update(data):
-                if telemetry: telemetry.update("The Architect", data); telemetry.refresh()
-            with telemetry if telemetry else console.status("[cyan]Planning...[/cyan]"):
-                outline = self.planner.chat(plan_prompt, context=self.research_notes[:50000], on_update=on_plan_update)
+            for attempt in range(max_retries):
+                console.print(f"\n[cyan]Drafting Master Vision (Attempt {attempt+1}/{max_retries})...[/cyan]")
+                
+                def update_p(data):
+                    if telemetry: telemetry.update("Book Architect", data); telemetry.refresh()
 
-            self._log("0_Book_Outline.md", outline)
+                current_plan = planner.chat(
+                    f"Topic: {self.user_prompt}\nStyle: {self.book_style}\nTitle: {self.book_title or 'TBD'}",
+                    context=self.research_notes[:40000],
+                    on_update=update_p
+                )
+                
+                console.print("[yellow]Auditing plan for repetition and linearity...[/yellow]")
+                
+                def update_au(data):
+                    if telemetry: telemetry.update("Structural Auditor", data); telemetry.refresh()
+                    
+                audit_result = auditor.chat(
+                    f"Evaluate this book plan for repetitiveness and linearity:\n\n{current_plan}",
+                    on_update=update_au
+                )
+                
+                if "REJECTED" not in audit_result.upper() or attempt == max_retries - 1:
+                    master_vision = current_plan
+                    console.print("[green]✓ Plan Approved by Structural Auditor.[/green]")
+                    break
+                else:
+                    console.print(f"[bold yellow]⚠️ Plan Rejected by Auditor:[/bold yellow]\n{audit_result.replace('REJECTED', '').strip()}")
+                    console.print("[dim]Architect is re-planning for better variety...[/dim]")
+            
+            self._log("0_Book_Outline.md", master_vision)
 
         # Parse outline to extract structure
-        console.print(Panel(Markdown(outline), title="Book Outline", border_style="cyan"))
+        console.print(Panel(master_vision, title="Book Outline", border_style="cyan"))
 
         if questionary.confirm("Edit the outline manually?", default=False).ask():
             console.print(f"Outline saved to: {os.path.join(self.log_dir, '0_Book_Outline.md')}")
