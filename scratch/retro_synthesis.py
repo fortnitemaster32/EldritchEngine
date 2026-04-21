@@ -15,6 +15,9 @@ import config_manager
 
 console = Console()
 
+def clear_screen():
+    os.system("cls" if os.name == "nt" else "clear")
+
 def run_retro_synthesis(log_dir):
     console.print(Panel.fit(f"🔄 [bold gold1]Retroactive Synthesis[/bold gold1]\nTarget: {log_dir}", border_style="gold1"))
     
@@ -120,6 +123,15 @@ if __name__ == "__main__":
         print("No deep research logs found.")
         sys.exit(0)
     
-    selected_log = questionary.select("Select log folder to re-synthesize:", choices=deep_logs).ask()
-    if selected_log:
-        run_retro_synthesis(os.path.join(logs_base, selected_log))
+    selected_logs = questionary.checkbox(
+        "Select log folder(s) to re-synthesize (Multi-select enabled):", 
+        choices=deep_logs
+    ).ask()
+    
+    if selected_logs:
+        for log in selected_logs:
+            clear_screen()
+            run_retro_synthesis(os.path.join(logs_base, log))
+            console.print(f"\n[bold gold1]Finished Batch Processing for {log}[/bold gold1]\n")
+        
+        console.print("[bold green]All selected batches complete![/bold green]")
