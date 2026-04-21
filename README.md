@@ -103,7 +103,6 @@ The following table maps agents/workflows to their external prompt files in `pro
 | | Editor | `iterative_editor.md` |
 | **Book Mode** | Condenser | `book_condenser.md` |
 | | Title Gen | `book_title_gen.md` |
-| **Retro-Synth** | Synthesis | `chief_scholar_synthesis.md` |
 
 ## ⚠️ Safety & Hardware
 If you encounter "Context Window Exceeded" errors, the engine will guide you through fixing them in LM Studio. You can also adjust the **Max Context Window** in the Settings menu to match your GPU's VRAM.

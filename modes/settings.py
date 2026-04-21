@@ -64,7 +64,6 @@ def run_settings_mode():
                 ("Short Writing", "Planner", "short_planner.md"),
                 ("Short Writing", "Writers", "short_writer_creative.md, etc."),
                 ("Book Mode", "Condenser", "book_condenser.md"),
-                ("Retro-Synth", "Synthesis", "chief_scholar_synthesis.md"),
             ]
             
             for w, a, f in registry:
