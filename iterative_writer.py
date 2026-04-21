@@ -18,9 +18,10 @@ class IterativeWriterWorkflow:
         self.para_count = para_count
         self.style_choice = style_choice
         
-        os.makedirs(os.path.join(SCRIPT_DIR, "outputs"), exist_ok=True)
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        self.output_file = os.path.join(SCRIPT_DIR, "outputs", f"iterative_draft_{timestamp}.md")
+        self.log_dir = os.path.join(SCRIPT_DIR, "logs", f"iterative_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+        os.makedirs(self.log_dir, exist_ok=True)
+        self.output_file = os.path.join(SCRIPT_DIR, "outputs", f"iterative_draft_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md")
+        self.state_path = os.path.join(self.log_dir, "state.json")
         
         self.planner = LMStudioAgent(
             "The Planner", "Essay Architect",
@@ -61,6 +62,28 @@ class IterativeWriterWorkflow:
         with open(self.output_file, "w", encoding="utf-8") as f:
             f.write(content.strip())
 
+    def save_state(self, outline: str, paragraphs_plan: list, approved_draft: str, current_index: int):
+        import json
+        state = {
+            "prompt": self.user_prompt,
+            "outline": outline,
+            "paragraphs_plan": paragraphs_plan,
+            "approved_draft": approved_draft,
+            "current_index": current_index,
+            "para_count": self.para_count,
+            "style": self.style_choice,
+            "output_file": self.output_file
+        }
+        with open(self.state_path, "w", encoding="utf-8") as f:
+            json.dump(state, f, indent=4)
+
+    def load_state(self):
+        import json
+        if os.path.exists(self.state_path):
+            with open(self.state_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        return None
+
     def run(self, telemetry=None):
         console.print(Panel.fit(
             f"🔄 [bold gold1]Iterative Mode[/bold gold1]\n"
@@ -68,88 +91,99 @@ class IterativeWriterWorkflow:
             border_style="gold1"
         ))
 
-        def on_plan_update(data):
-            if telemetry: telemetry.update("The Planner", data); telemetry.refresh()
+        state = self.load_state()
+        if state:
+            outline_res = state["outline"]
+            paragraphs_plan = state["paragraphs_plan"]
+            approved_draft = state["approved_draft"]
+            start_idx = state["current_index"]
+            self.output_file = state["output_file"]
+            console.print(f"\n[bold yellow]Resuming iterative session at paragraph {start_idx + 1}...[/bold yellow]")
+        else:
+            def on_plan_update(data):
+                if telemetry: telemetry.update("The Planner", data); telemetry.refresh()
 
-        with telemetry if telemetry else console.status("[cyan]Planning...[/cyan]"):
-            plan_prompt = (
-                f"Topic/Prompt: {self.user_prompt}\n\n"
-                "Create a detailed, paragraph-by-paragraph outline for this essay. "
-                "1. Start with a clear THESIS STATEMENT.\n"
-                + (f"2. Format the rest of your response as exactly {self.para_count} distinct paragraph plans.\n" if self.para_count > 0 else "2. Format the rest of your response as a series of distinct paragraph plans.\n")
-                + "CRITICAL: You MUST wrap the detailed plan for EACH individual paragraph entirely inside a <paragraph_plan>...</paragraph_plan> XML block. Do not put multiple paragraphs in one block.\n"
-                "Include an Intro, several Body paragraphs, and a Conclusion."
-            )
-            outline_res = self.planner.chat(plan_prompt, context=self.research_notes[:80000], on_update=on_plan_update)
-        
-        console.print(Panel(Markdown(outline_res), title="Essay Thesis & Outline", border_style="cyan"))
-        
-        self.update_live_doc(outline_res)
-        console.print(f"\n[bold magenta]Open this file in your editor to view or manually edit the outline: {self.output_file}[/bold magenta]")
-        
-        while True:
-            action = questionary.select(
-                "Outline Action:",
-                choices=[
-                    "Accept Outline (Proceed to writing)",
-                    "Reload from file (If you manually edited it)",
-                    "Redo with instructions",
-                    "Redo (Regenerate)"
-                ]
-            ).ask()
+            with telemetry if telemetry else console.status("[cyan]Planning...[/cyan]"):
+                plan_prompt = (
+                    f"Topic/Prompt: {self.user_prompt}\n\n"
+                    "Create a detailed, paragraph-by-paragraph outline for this essay. "
+                    "1. Start with a clear THESIS STATEMENT.\n"
+                    + (f"2. Format the rest of your response as exactly {self.para_count} distinct paragraph plans.\n" if self.para_count > 0 else "2. Format the rest of your response as a series of distinct paragraph plans.\n")
+                    + "CRITICAL: You MUST wrap the detailed plan for EACH individual paragraph entirely inside a <paragraph_plan>...</paragraph_plan> XML block. Do not put multiple paragraphs in one block.\n"
+                    "Include an Intro, several Body paragraphs, and a Conclusion."
+                )
+                outline_res = self.planner.chat(plan_prompt, context=self.research_notes[:80000], on_update=on_plan_update)
             
-            if action == "Accept Outline (Proceed to writing)":
-                break
-            elif action == "Reload from file (If you manually edited it)":
-                with open(self.output_file, "r", encoding="utf-8") as f:
-                    outline_res = f.read().strip()
-                console.print("[green]Outline reloaded from file![/green]")
-                break
-            elif action == "Redo with instructions":
-                feedback = questionary.text("Enter your instructions for the new outline:").ask()
-                with console.status("[cyan]Regenerating outline with feedback...[/cyan]"):
-                    outline_res = self.planner.chat(plan_prompt + f"\n\nUSER FEEDBACK: {feedback}", context=self.research_notes[:80000])
-                self.update_live_doc(outline_res)
-                console.print(Panel(Markdown(outline_res), title="Essay Thesis & Outline (Updated)", border_style="cyan"))
-            elif action == "Redo (Regenerate)":
-                with console.status("[cyan]Regenerating outline...[/cyan]"):
-                    outline_res = self.planner.chat(plan_prompt + "\n\nCRITICAL: Make it structurally different and better this time.", context=self.research_notes[:80000])
-                self.update_live_doc(outline_res)
-                console.print(Panel(Markdown(outline_res), title="Essay Thesis & Outline (V2)", border_style="cyan"))
-
-        import re
-        # Extract paragraphs from XML tags
-        paragraphs_plan = re.findall(r'<paragraph_plan>(.*?)</paragraph_plan>', outline_res, re.DOTALL)
-        paragraphs_plan = [p.strip() for p in paragraphs_plan if p.strip()]
-        
-        if not paragraphs_plan:
-            # Fallback parsing if LLM ignores XML tags
-            paragraphs_plan = []
-            current_para = []
-            for line in outline_res.split('\n'):
-                # Look for lines starting with a number and dot like '1. ' or '10. '
-                if line.strip() and line.strip()[0].isdigit() and "." in line[:5] and len(line) < 100:
-                    if current_para:
-                        paragraphs_plan.append("\n".join(current_para))
-                    current_para = [line]
-                elif current_para:
-                    current_para.append(line)
-            if current_para:
-                paragraphs_plan.append("\n".join(current_para))
+            console.print(Panel(Markdown(outline_res), title="Essay Thesis & Outline", border_style="cyan"))
+            
+            self.update_live_doc(outline_res)
+            console.print(f"\n[bold magenta]Open this file in your editor to view or manually edit the outline: {self.output_file}[/bold magenta]")
+            
+            while True:
+                action = questionary.select(
+                    "Outline Action:",
+                    choices=[
+                        "Accept Outline (Proceed to writing)",
+                        "Reload from file (If you manually edited it)",
+                        "Redo with instructions",
+                        "Redo (Regenerate)"
+                    ]
+                ).ask()
                 
-            if len(paragraphs_plan) < 3:
-                # Ultimate fallback
-                paragraphs_plan = [p.strip() for p in outline_res.split('\n\n') if len(p.strip()) > 30 and 'thesis' not in p.lower()]
+                if action == "Accept Outline (Proceed to writing)":
+                    break
+                elif action == "Reload from file (If you manually edited it)":
+                    with open(self.output_file, "r", encoding="utf-8") as f:
+                        outline_res = f.read().strip()
+                    console.print("[green]Outline reloaded from file![/green]")
+                    break
+                elif action == "Redo with instructions":
+                    feedback = questionary.text("Enter your instructions for the new outline:").ask()
+                    with console.status("[cyan]Regenerating outline with feedback...[/cyan]"):
+                        outline_res = self.planner.chat(plan_prompt + f"\n\nUSER FEEDBACK: {feedback}", context=self.research_notes[:80000])
+                    self.update_live_doc(outline_res)
+                    console.print(Panel(Markdown(outline_res), title="Essay Thesis & Outline (Updated)", border_style="cyan"))
+                elif action == "Redo (Regenerate)":
+                    with console.status("[cyan]Regenerating outline...[/cyan]"):
+                        outline_res = self.planner.chat(plan_prompt + "\n\nCRITICAL: Make it structurally different and better this time.", context=self.research_notes[:80000])
+                    self.update_live_doc(outline_res)
+                    console.print(Panel(Markdown(outline_res), title="Essay Thesis & Outline (V2)", border_style="cyan"))
 
-        approved_draft = f"# {self.user_prompt}\n\n"
-        self.update_live_doc(approved_draft)
-        
-        console.print(f"[bold green]Outline accepted. {len(paragraphs_plan)} paragraphs to write.[/bold green]")
-        console.print(f"[bold magenta]We will now begin writing. The live updates will overwrite the outline in: {self.output_file}[/bold magenta]")
-        questionary.confirm("Press Enter when you are ready to begin drafting...").ask()
+            import re
+            # Extract paragraphs from XML tags
+            paragraphs_plan = re.findall(r'<paragraph_plan>(.*?)</paragraph_plan>', outline_res, re.DOTALL)
+            paragraphs_plan = [p.strip() for p in paragraphs_plan if p.strip()]
+            
+            if not paragraphs_plan:
+                # Fallback parsing if LLM ignores XML tags
+                paragraphs_plan = []
+                current_para = []
+                for line in outline_res.split('\n'):
+                    # Look for lines starting with a number and dot like '1. ' or '10. '
+                    if line.strip() and line.strip()[0].isdigit() and "." in line[:5] and len(line) < 100:
+                        if current_para:
+                            paragraphs_plan.append("\n".join(current_para))
+                        current_para = [line]
+                    elif current_para:
+                        current_para.append(line)
+                if current_para:
+                    paragraphs_plan.append("\n".join(current_para))
+                    
+                if len(paragraphs_plan) < 3:
+                    # Ultimate fallback
+                    paragraphs_plan = [p.strip() for p in outline_res.split('\n\n') if len(p.strip()) > 30 and 'thesis' not in p.lower()]
+
+            approved_draft = f"# {self.user_prompt}\n\n"
+            self.update_live_doc(approved_draft)
+            start_idx = 0
+            
+            console.print(f"[bold green]Outline accepted. {len(paragraphs_plan)} paragraphs to write.[/bold green]")
+            console.print(f"[bold magenta]We will now begin writing. The live updates will overwrite the outline in: {self.output_file}[/bold magenta]")
+            questionary.confirm("Press Enter when you are ready to begin drafting...").ask()
 
         # Step 2: Iterative Writing
-        for i, para_plan in enumerate(paragraphs_plan):
+        for i in range(start_idx, len(paragraphs_plan)):
+            para_plan = paragraphs_plan[i]
             console.print(f"\n[bold gold1]Drafting Paragraph {i+1}/{len(paragraphs_plan)}...[/bold gold1]")
             console.print(f"[dim]Plan: {para_plan}[/dim]")
             
@@ -253,6 +287,7 @@ class IterativeWriterWorkflow:
                 if action == "Accept and Continue":
                     approved_draft += candidate_para + "\n\n"
                     self.update_live_doc(approved_draft)
+                    self.save_state(outline_res, paragraphs_plan, approved_draft, i + 1)
                     break
                 elif action == "Redo with instructions":
                     feedback = questionary.text("Enter your instructions to edit this paragraph:").ask()
@@ -275,11 +310,16 @@ class IterativeWriterWorkflow:
         with open(self.output_file, "a", encoding="utf-8") as f:
             f.write(f"\n\n---\n## Fact-Check Report\n\n{fact_check_res}")
 
+        # Cleanup state on completion
+        if os.path.exists(self.state_path):
+            os.remove(self.state_path)
+
         console.print(Panel.fit(
             f"✅ [bold green]Iterative writing complete![/bold green]\n\n"
             f"Final Essay saved to: [bold underline]{self.output_file}[/bold underline]",
             border_style="green"
         ))
+
         return {
             "type": "single",
             "output_file": self.output_file,

@@ -132,14 +132,20 @@ class LMStudioAgent:
             if log_dir:
                 shadow_path = os.path.join(log_dir, "shadow_log.jsonl")
                 import json
-                with open(shadow_path, "a", encoding="utf-8") as f:
-                    log_entry = {
-                        "timestamp": datetime.now().isoformat(),
-                        "agent": self.name,
-                        "prompt": messages,
-                        "response": "".join(full_response)
-                    }
-                    f.write(json.dumps(log_entry) + "\n")
+                import threading
+                # Use a global-ish lock based on the path to ensure thread safety
+                if not hasattr(self, '_log_lock'):
+                    self._log_lock = threading.Lock()
+                
+                with self._log_lock:
+                    with open(shadow_path, "a", encoding="utf-8") as f:
+                        log_entry = {
+                            "timestamp": datetime.now().isoformat(),
+                            "agent": self.name,
+                            "prompt": messages,
+                            "response": "".join(full_response)
+                        }
+                        f.write(json.dumps(log_entry) + "\n")
         except:
             pass 
 

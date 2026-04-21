@@ -365,16 +365,25 @@ def _add_title_page(doc: fitz.Document, title: str, subtitle: str = "", summary:
 
 
 def _fill_toc_page(doc: fitz.Document, toc_page_index: int, toc_items: list, theme_fonts: dict) -> None:
-    page = doc[toc_page_index]
+    current_page_idx = toc_page_index
+    page = doc[current_page_idx]
     fonts = _setup_page_fonts(page, theme_fonts)
     
     y = MARGIN
     page.insert_textbox(fitz.Rect(MARGIN, y, PAGE_WIDTH - MARGIN, y + 50), "Table of Contents", fontname=fonts["heading"], fontsize=28, align=1)
     y += 70
+    
     for title, pno in toc_items:
         if y + 30 > PAGE_HEIGHT - MARGIN:
-            # For simplicity, we only support one page of TOC for now
-            break
+            # Create a new TOC page and move the pointer
+            new_page = doc.new_page(width=PAGE_WIDTH, height=PAGE_HEIGHT, pno=current_page_idx + 1)
+            fonts = _setup_page_fonts(new_page, theme_fonts)
+            current_page_idx += 1
+            page = new_page
+            y = MARGIN
+            page.insert_textbox(fitz.Rect(MARGIN, y, PAGE_WIDTH - MARGIN, y + 40), "Table of Contents (cont.)", fontname=fonts["heading"], fontsize=18, align=1)
+            y += 50
+            
         rect = fitz.Rect(MARGIN, y, PAGE_WIDTH - MARGIN, y + 25)
         page.insert_textbox(rect, f"{title}", fontname=fonts["body"], fontsize=13, align=0)
         page.insert_textbox(rect, f"{pno}", fontname=fonts["body"], fontsize=13, align=2)
