@@ -36,15 +36,23 @@ class LMStudioAgent:
         full_content = f"### PDF CONTEXT ###\n{context}\n\n### TASK ###\n{user_input}" if context else user_input
         messages.append({"role": "user", "content": full_content})
         
+        # We allow the exception to propagate so the UI can catch it or the process can stop
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            temperature=0.7,
+        )
+        return response.choices[0].message.content
+
+    @staticmethod
+    def check_connection(base_url: str = "http://localhost:1234/v1") -> bool:
+        """Checks if LM Studio is reachable."""
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=0.7,
-            )
-            return response.choices[0].message.content
-        except Exception as e:
-            return f"Error communicating with LM Studio: {e}"
+            import requests
+            response = requests.get(f"{base_url}/models", timeout=2)
+            return response.status_code == 200
+        except:
+            return False
 
 class AgenticWorkflow:
     def _load_prompt(self, filename: str) -> str:

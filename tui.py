@@ -53,6 +53,25 @@ def clear_screen():
     os.system("cls" if os.name == "nt" else "clear")
 
 
+def check_llm_connection():
+    """Verify LM Studio is running before starting modes that require it."""
+    if not agent_writer.LMStudioAgent.check_connection():
+        console.print(Panel.fit(
+            "[bold red]CRITICAL ERROR: LM Studio Connection Failed[/bold red]\n\n"
+            "The engine cannot reach the local LLM server at [bold underline]http://localhost:1234/v1[/bold underline].\n\n"
+            "1. Open [bold cyan]LM Studio[/bold cyan]\n"
+            "2. Go to the [bold cyan]Local Server[/bold cyan] tab (↔ icon)\n"
+            "3. Ensure a model is loaded and the server is [bold green]STARTED[/bold green]\n"
+            "4. Verify the port is set to [bold]1234[/bold]",
+            title="Connection Error",
+            border_style="red",
+            padding=(1, 2)
+        ))
+        questionary.press_any_key_to_continue().ask()
+        return False
+    return True
+
+
 def get_local_files():
     input_dir = os.path.join(SCRIPT_DIR, "inputs")
     os.makedirs(input_dir, exist_ok=True)
@@ -1177,6 +1196,14 @@ def main():
         clear_screen()
         print_header()
 
+        if mode == "history":
+            run_history_mode()
+            continue
+
+        # For all other modes, we MUST have LM Studio running
+        if not check_llm_connection():
+            continue
+
         if mode == "research":
             run_research_mode()
         elif mode == "deep_research":
@@ -1191,8 +1218,6 @@ def main():
             run_custom_mode()
         elif mode == "book":
             run_book_mode()
-        elif mode == "history":
-            run_history_mode()
 
         console.print("\n[bold green]✓ Mode completed![/bold green]")
 
