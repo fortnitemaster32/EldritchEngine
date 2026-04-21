@@ -274,6 +274,7 @@ class BookWriterWorkflow:
         # Parse outline to extract structure
         console.print(Panel(master_vision, title="Book Outline", border_style="cyan"))
 
+        outline = master_vision
         if questionary.confirm("Edit the outline manually?", default=False).ask():
             console.print(f"Outline saved to: {os.path.join(self.log_dir, '0_Book_Outline.md')}")
             console.print("Edit the file manually, then press Enter to continue.")
