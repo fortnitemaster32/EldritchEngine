@@ -1,6 +1,7 @@
 import os
 import sys
 import questionary
+import concurrent.futures
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -23,13 +24,11 @@ def run_retro_synthesis(log_dir):
     # 1. Load data
     compiled_notes = {}
     critiques = {}
-    user_prompt = "Retroactive Synthesis" # Default
     
     files = os.listdir(log_dir)
     for f in files:
         path = os.path.join(log_dir, f)
         if f.endswith("_Notes.md") and f[0].isdigit():
-            # Extract name: e.g. "1_Dr._Evelyn_Hart_Notes.md" -> "Dr. Evelyn Hart"
             name = f.split("_", 1)[1].rsplit("_", 1)[0].replace("_", " ")
             with open(path, "r", encoding="utf-8") as fh:
                 compiled_notes[name] = fh.read()
@@ -71,23 +70,41 @@ def run_retro_synthesis(log_dir):
     chapters = [line.strip() for line in outline_res.splitlines() if line.strip() and line.strip()[0].isdigit() and "." in line]
     if not chapters: chapters = ["1. Comprehensive Synthesis"]
 
-    # 4. Write Chapters
-    console.print(f"\n[bold green]Writing {len(chapters)} Chapters...[/bold green]")
-    final_paper_sections = []
-    for i, chapter in enumerate(chapters, 1):
-        console.print(f"  🚀 [bold cyan]Drafting Chapter {i}:[/bold cyan] {chapter}")
-        with Progress(SpinnerColumn(), TextColumn("{task.description}"), console=console) as prog:
-            prog.add_task(f"Synthesizing Section...", total=None)
-            section_prompt = (
-                f"CHAPTER: {chapter}\n\n"
-                "TASK: Write a 1,500-2,000 word analytical deep-dive. Compare the 4 scholars explicitly. "
-                "Maintain extreme academic rigor."
-            )
-            section_content = chief_scholar.chat(section_prompt, context=all_research_and_debate[:120000])
-            final_paper_sections.append(f"# {chapter}\n\n{section_content}")
+    # 4. Parallel Chapter Drafting
+    console.print(f"\n[bold green]Writing {len(chapters)} Chapters (2 Parallely)...[/bold green]")
+    
+    sections = [None] * len(chapters)
+    
+    def draft_chapter(idx, chapter_title):
+        section_prompt = (
+            f"CHAPTER: {chapter_title}\n\n"
+            "TASK: Write a 1,500-2,000 word analytical deep-dive. Compare the 4 scholars explicitly. "
+            "Maintain extreme academic rigor."
+        )
+        content = chief_scholar.chat(section_prompt, context=all_research_and_debate[:120000])
+        return idx, f"# {chapter_title}\n\n{content}"
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console
+    ) as progress:
+        overall_task = progress.add_task("[bold gold1]Drafting Chapters...[/bold gold1]", total=len(chapters))
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            future_to_chapter = {
+                executor.submit(draft_chapter, i, title): title 
+                for i, title in enumerate(chapters)
+            }
+            
+            for future in concurrent.futures.as_completed(future_to_chapter):
+                idx, content = future.result()
+                sections[idx] = content
+                progress.update(overall_task, advance=1)
+                console.print(f"  [green]✓ Completed:[/green] {chapters[idx]}")
 
     # 5. Save
-    final_paper = "\n\n---\n\n".join(final_paper_sections)
+    final_paper = "\n\n---\n\n".join(sections)
     output_path = os.path.join(log_dir, "RE_SYNTHESIZED_MASTER_THESIS.md")
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(f"# RE-SYNTHESIZED MASTER THESIS\n\nPrompt: {user_prompt}\n\n" + final_paper)

@@ -8,14 +8,13 @@ Phase 3: Synthesis (Chief Scholar combines everything into a master paper).
 
 import os
 import sys
-
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-import math
+import concurrent.futures
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+import math
 import agent_writer
 import research_cache
 
@@ -209,24 +208,40 @@ class DeepResearchWorkflow:
             chapters = ["1. Introduction and Core Analysis", "2. Disciplinary Intersections", "3. Synthesis of Scholarly Debate", "4. Conclusion"]
 
         # --- Phase 4: Sectional Synthesis (Long-Form Drafting) ---
-        console.print(f"\n[bold green]Phase 4: Sectional Synthesis ({len(chapters)} Chapters)...[/bold green]")
-        final_paper_sections = []
+        console.print(f"\n[bold green]Phase 4: Sectional Synthesis ({len(chapters)} Chapters, 2 Parallely)...[/bold green]")
         
-        for i, chapter in enumerate(chapters, 1):
-            console.print(f"  🚀 [bold cyan]Drafting Chapter {i}/{len(chapters)}:[/bold cyan] {chapter}")
-            with Progress(SpinnerColumn(), TextColumn("{task.description}"), console=console) as prog:
-                prog.add_task(f"Synthesizing Chapter {i}...", total=None)
-                section_prompt = (
-                    f"YOU ARE WRITING A CHAPTER FOR A 20,000 WORD MASTER THESIS.\n"
-                    f"CURRENT CHAPTER: {chapter}\n\n"
-                    "TASK: Write a 1,500-2,000 word analytical deep-dive for this chapter. "
-                    "You MUST weave together the perspectives of the 4 PhDs (Hart, Reid, Tariq, Rostova), "
-                    "explicitly noting where they agree, disagree, or provide complementary nuance. "
-                    "Maintain extreme information density and academic rigor."
-                )
-                section_content = self.chief_scholar.chat(section_prompt, context=all_research_and_debate[:120000])
-                final_paper_sections.append(f"# {chapter}\n\n{section_content}")
-                self._log_step(f"4_Chapter_{i}", section_content)
+        final_paper_sections = [None] * len(chapters)
+        
+        def draft_chapter(idx, chapter_title):
+            section_prompt = (
+                f"YOU ARE WRITING A CHAPTER FOR A 20,000 WORD MASTER THESIS.\n"
+                f"CURRENT CHAPTER: {chapter_title}\n\n"
+                "TASK: Write a 1,500-2,000 word analytical deep-dive for this chapter. "
+                "You MUST weave together the perspectives of the 4 PhDs (Hart, Reid, Tariq, Rostova), "
+                "explicitly noting where they agree, disagree, or provide complementary nuance. "
+                "Maintain extreme information density and academic rigor."
+            )
+            section_content = self.chief_scholar.chat(section_prompt, context=all_research_and_debate[:120000])
+            return idx, f"# {chapter_title}\n\n{section_content}"
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console
+        ) as progress:
+            overall_task = progress.add_task("[bold gold1]Drafting Chapters...[/bold gold1]", total=len(chapters))
+            
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                future_to_chapter = {
+                    executor.submit(draft_chapter, i, title): title 
+                    for i, title in enumerate(chapters)
+                }
+                
+                for future in concurrent.futures.as_completed(future_to_chapter):
+                    idx, content = future.result()
+                    final_paper_sections[idx] = content
+                    progress.update(overall_task, advance=1)
+                    console.print(f"  [green]✓ Completed:[/green] {chapters[idx]}")
 
         final_paper = "\n\n---\n\n".join(final_paper_sections)
         output_file = os.path.join(self.log_dir, "5_Final_Master_Thesis.md")
