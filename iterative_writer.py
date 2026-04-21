@@ -234,7 +234,7 @@ class IterativeWriterWorkflow:
                 
                 if action in ["Generate Fresh", "Redo (Regenerate)", "Redo with instructions", "Smooth Manual Edits (Reload from file and polish)"]:
                     with console.status("[yellow]The Critic is evaluating...[/yellow]"):
-                        critique_res = self.critique.chat(f"Paragraph to critique:\n{candidate_para}", context=self.research_notes[:30000])
+                        critique_res = self.critique.chat(f"Paragraph to critique:\n{candidate_para}", context=outline_res[:10000])
                 
                 console.print(Panel(candidate_para, title=f"Paragraph {i+1} Candidate", border_style="green"))
                 console.print(Panel(critique_res, title="The Critic's Evaluation", border_style="yellow"))
