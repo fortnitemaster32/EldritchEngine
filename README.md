@@ -70,7 +70,7 @@ For best performance, I recommend using the **Gemma 4 E2B IT** model in LM Studi
     python tui.py
     ```
 
-## ✨ Key Features
+## Key Features
 - **Keyboard-Driven TUI**: Rapid mode and file selection.
 - **Decoupled Research Caching**: Analyze a massive PDF once, then write 10 different essays about it without re-reading the book.
 - **Deep Research Debate**: PhD agents literally debate each other's findings to eliminate blind spots.
@@ -79,7 +79,7 @@ For best performance, I recommend using the **Gemma 4 E2B IT** model in LM Studi
 - **Parallel Processing**: Agents work in parallel to significantly reduce wait times.
 - **Rolling Context Windows**: Enables writing extremely long, coherent pieces without memory overflow.
 
-## 🗃️ Prompt Registry
+## Prompt Registry
 The following table maps agents/workflows to their external prompt files in `prompts/`. Edit these to change behavior.
 
 | Workflow | Agent | Prompt File |
@@ -107,6 +107,6 @@ The following table maps agents/workflows to their external prompt files in `pro
 | | Title Gen | `book_title_gen.md` |
 | | Citations | `citation_manager.md` |
 
-## ⚠️ Safety & Hardware
+## Safety & Hardware
 If you encounter "Context Window Exceeded" errors, the engine will guide you through fixing them in LM Studio. You can also adjust the **Max Context Window** in the Settings menu to match your GPU's VRAM.
 
