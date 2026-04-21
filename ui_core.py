@@ -153,6 +153,9 @@ def pick_font_theme() -> str:
     themes = list(FONT_THEMES.keys())
     return questionary.select("Select a font theme for the PDF:", choices=themes, default="Modern Sans").ask() or "Modern Sans"
 
+def offer_pdf_export(result: dict | None, script_dir):
+    if not result: return
+
     # High-visibility output report
     md_file = result.get("output_file")
     log_dir = result.get("log_dir")
