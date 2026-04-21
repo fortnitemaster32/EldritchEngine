@@ -47,9 +47,24 @@ class PermanentMemory:
         if not url.endswith("/v1"):
             url = f"{url.rstrip('/')}/v1"
         
+        # --- NEW: Model Detection ---
+        model_name = "default"
+        try:
+            with urllib.request.urlopen(f"{url}/models") as res:
+                m_data = json.loads(res.read().decode("utf-8"))
+                # Try to find an embedding model, otherwise use the first loaded model
+                for m in m_data["data"]:
+                    if "embed" in m["id"].lower():
+                        model_name = m["id"]
+                        break
+                if model_name == "default" and m_data["data"]:
+                    model_name = m_data["data"][0]["id"]
+        except:
+            pass # Fallback to default or nomic
+
         endpoint = f"{url}/embeddings"
         data = json.dumps({
-            "model": "text-embedding-nomic-v1", # Common default in LM Studio
+            "model": model_name,
             "input": text
         }).encode("utf-8")
         
@@ -59,7 +74,7 @@ class PermanentMemory:
                 res_data = json.loads(response.read().decode("utf-8"))
                 return res_data["data"][0]["embedding"]
         except Exception as e:
-            console.print(f"[red]Memory Error (Embeddings): {e}[/red]")
+            # Silent fail for now, UI will handle empty vector
             return []
 
     def index_text(self, text: str, source_name: str, chunk_size: int = 1000):
@@ -119,21 +134,22 @@ class PermanentMemory:
         return "\n\n---\n\n".join(top_chunks)
 
     def print_cognitive_atlas(self):
-        """Easter Egg: Visualize the 3 main topics in the memory vault."""
-        if len(self.index) < 5:
-            console.print("[yellow]Not enough memories to build an Atlas. Index more data first![/yellow]")
+        """Easter Egg: Visualize the main topics in the memory vault."""
+        if len(self.index) < 2:
+            console.print("[yellow]Not enough memories to build an Atlas. Index at least 2 chunks first![/yellow]")
             return
 
         console.print("\n[bold gold1]Generating Cognitive Atlas (Topic Graph)...[/bold gold1]")
         
         # Simple K-Means implementation in pure Python
-        # For simplicity, we'll just pick 3 random centroids and cluster
         import random
-        k = 3
-        vectors = [item["vector"] for item in self.index]
-        if not vectors: return
+        k = min(3, len(self.index)) # Adjust K if we have very little data
+        vectors = [item["vector"] for item in self.index if item["vector"]]
+        if not vectors: 
+            console.print("[red]No valid embedding vectors found in vault.[/red]")
+            return
         
-        # Initialize centroids
+        # Initialize centroids safely
         centroids = random.sample(vectors, k)
         
         def dist(v1, v2):
