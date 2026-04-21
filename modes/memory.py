@@ -42,30 +42,47 @@ def run_memory_mode(script_dir):
             questionary.press_any_key_to_continue().ask()
 
         elif choice == "Mass Index Unadded Logs (Deep Scan)":
+            import agent_writer
+            if not agent_writer.check_llm_connection():
+                continue
+                
             log_root = os.path.join(script_dir, "logs")
+            if not os.path.exists(log_root):
+                console.print("[yellow]No logs directory found.[/yellow]")
+                questionary.press_any_key_to_continue().ask()
+                continue
+
             unindexed = []
             for root, dirs, files in os.walk(log_root):
                 for f in files:
                     if f.lower().endswith(".md"):
-                        rel_path = os.path.relpath(os.path.join(root, f), log_root)
+                        full_p = os.path.join(root, f)
+                        # Normalize to forward slashes for the index key
+                        rel_path = os.path.relpath(full_p, log_root).replace("\\", "/")
                         if not permanent_memory.memory.is_file_indexed(rel_path):
-                            unindexed.append((os.path.join(root, f), rel_path))
+                            unindexed.append((full_p, rel_path))
             
             if not unindexed:
                 console.print("[yellow]All logs are already indexed in Permanent Memory.[/yellow]")
                 questionary.press_any_key_to_continue().ask()
                 continue
             
-            console.print(f"[cyan]Found {len(unindexed)} unindexed research logs.[/cyan]")
+            console.print(Panel(f"Found [bold cyan]{len(unindexed)}[/bold cyan] unindexed research logs.", title="Deep Scan Results"))
             if questionary.confirm(f"Index all {len(unindexed)} files now?", default=True).ask():
+                success_count = 0
                 for full_path, rel_path in unindexed:
                     try:
                         with open(full_path, "r", encoding="utf-8") as fh:
                             content = fh.read()
+                        if not content.strip(): continue
+                        
+                        # Add a tiny delay to be kind to LM Studio
                         permanent_memory.memory.index_text(content, rel_path)
+                        success_count += 1
                     except Exception as e:
-                        console.print(f"[red]Error indexing {rel_path}: {e}[/red]")
-                console.print("[bold green]Mass Ingestion Complete![/bold green]")
+                        console.print(f"[red]Failed to index {rel_path}: {e}[/red]")
+                
+                console.print(f"[bold green]✓ Successfully indexed {success_count} files![/bold green]")
                 questionary.press_any_key_to_continue().ask()
 
         elif choice == "Index New Data (PDFs/Text)":

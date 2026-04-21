@@ -302,7 +302,7 @@ class ShortWriterWorkflow:
 
     def run(self, telemetry=None) -> str:
         console.print(Panel.fit(
-            f"✍️  [bold gold1]Short Writing Mode[/bold gold1]\n"
+            f"[bold gold1]Short Writing Mode[/bold gold1]\n"
             f"[dim]Genre: {self.genre} | Target: ~{self.target_words} words[/dim]",
             border_style="gold1"
         ))
@@ -325,7 +325,7 @@ class ShortWriterWorkflow:
             fh.write(final)
 
         console.print(Panel.fit(
-            f"✅ [bold green]Complete![/bold green]\n\n"
+            f"[bold green]Complete![/bold green]\n\n"
             f"Output: [bold underline]{output_file}[/bold underline]\n"
             f"Logs:   [bold underline]{self.log_dir}[/bold underline]",
             border_style="green"
