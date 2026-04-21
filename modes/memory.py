@@ -55,7 +55,13 @@ def run_memory_mode(script_dir):
             unindexed = []
             for root, dirs, files in os.walk(log_root):
                 for f in files:
-                    if f.lower().endswith(".md"):
+                    name_lower = f.lower()
+                    if name_lower.endswith(".md"):
+                        # Ensure we only index raw research, not generated essays or outlines
+                        is_research = "research" in name_lower or "notes" in name_lower
+                        if not is_research:
+                            continue
+                            
                         full_p = os.path.join(root, f)
                         # Normalize to forward slashes for the index key
                         rel_path = os.path.relpath(full_p, log_root).replace("\\", "/")
