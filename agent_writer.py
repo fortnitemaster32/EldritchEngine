@@ -46,13 +46,25 @@ class LMStudioAgent:
 
     @staticmethod
     def check_connection(base_url: str = "http://localhost:1234/v1") -> bool:
-        """Checks if LM Studio is reachable."""
-        try:
-            import requests
-            response = requests.get(f"{base_url}/models", timeout=2)
-            return response.status_code == 200
-        except:
-            return False
+        """Checks if LM Studio is reachable using standard library urllib."""
+        import urllib.request
+        import urllib.error
+
+        # Try both localhost and 127.0.0.1 as some systems resolve differently
+        hosts = [base_url]
+        if "localhost" in base_url:
+            hosts.append(base_url.replace("localhost", "127.0.0.1"))
+        
+        for url in hosts:
+            try:
+                # We check the /models endpoint specifically
+                check_url = f"{url.rstrip('/')}/models"
+                with urllib.request.urlopen(check_url, timeout=3) as response:
+                    if response.getcode() == 200:
+                        return True
+            except Exception:
+                continue
+        return False
 
 class AgenticWorkflow:
     def _load_prompt(self, filename: str) -> str:

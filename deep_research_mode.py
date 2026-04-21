@@ -175,7 +175,8 @@ class DeepResearchWorkflow:
                     progress.update(debate_task, advance=1)
 
         # --- Phase 3: Synthesis ---
-        console.print("\n[bold green]Phase 3: The Chief Scholar is synthesizing the final paper...[/bold green]")
+        # --- Phase 3: Thematic Mapping (Master Outline) ---
+        console.print("\n[bold green]Phase 3: The Chief Scholar is generating a 20k-word Master Outline...[/bold green]")
         
         all_research_and_debate = "### ORIGINAL RESEARCH NOTES ###\n"
         for name, notes in compiled_notes.items():
@@ -186,16 +187,54 @@ class DeepResearchWorkflow:
             all_research_and_debate += f"\n#### {name}'s Critique ####\n{critique}\n"
 
         with Progress(SpinnerColumn(), TextColumn("{task.description}"), console=console) as prog:
-            prog.add_task("Synthesizing Final Masterwork...", total=None)
-            final_paper = self.chief_scholar.chat(
-                f"PROMPT: {self.user_prompt}\n\nTASK: Synthesize the research and debate into a definitive masterwork.",
-                context=all_research_and_debate[:120000]
+            prog.add_task("Mapping Themes & Chapters...", total=None)
+            outline_prompt = (
+                f"TOPIC: {self.user_prompt}\n\n"
+                "TASK: Based on the research notes and debates provided, create a comprehensive 10-15 chapter outline "
+                "for a 20,000+ word master thesis. Each chapter should be a deep-dive into a specific intersection of the disciplines. "
+                "Output only a numbered list of chapters with descriptive titles."
             )
+            outline_res = self.chief_scholar.chat(outline_prompt, context=all_research_and_debate[:100000])
             
-        self._log_step("3_Final_Synthesis", final_paper)
+        self._log_step("3_Master_Outline", outline_res)
         
-        # --- Phase 4: Aggregated Dossier (High Density) ---
-        console.print("\n[bold cyan]Phase 4: Compiling the Aggregated Scholarly Dossier (High Density)...[/bold cyan]")
+        # Parse chapters
+        chapters = []
+        for line in outline_res.splitlines():
+            line = line.strip()
+            if line and line[0].isdigit() and "." in line:
+                chapters.append(line)
+        
+        if not chapters:
+            chapters = ["1. Introduction and Core Analysis", "2. Disciplinary Intersections", "3. Synthesis of Scholarly Debate", "4. Conclusion"]
+
+        # --- Phase 4: Sectional Synthesis (Long-Form Drafting) ---
+        console.print(f"\n[bold green]Phase 4: Sectional Synthesis ({len(chapters)} Chapters)...[/bold green]")
+        final_paper_sections = []
+        
+        for i, chapter in enumerate(chapters, 1):
+            console.print(f"  🚀 [bold cyan]Drafting Chapter {i}/{len(chapters)}:[/bold cyan] {chapter}")
+            with Progress(SpinnerColumn(), TextColumn("{task.description}"), console=console) as prog:
+                prog.add_task(f"Synthesizing Chapter {i}...", total=None)
+                section_prompt = (
+                    f"YOU ARE WRITING A CHAPTER FOR A 20,000 WORD MASTER THESIS.\n"
+                    f"CURRENT CHAPTER: {chapter}\n\n"
+                    "TASK: Write a 1,500-2,000 word analytical deep-dive for this chapter. "
+                    "You MUST weave together the perspectives of the 4 PhDs (Hart, Reid, Tariq, Rostova), "
+                    "explicitly noting where they agree, disagree, or provide complementary nuance. "
+                    "Maintain extreme information density and academic rigor."
+                )
+                section_content = self.chief_scholar.chat(section_prompt, context=all_research_and_debate[:120000])
+                final_paper_sections.append(f"# {chapter}\n\n{section_content}")
+                self._log_step(f"4_Chapter_{i}", section_content)
+
+        final_paper = "\n\n---\n\n".join(final_paper_sections)
+        output_file = os.path.join(self.log_dir, "5_Final_Master_Thesis.md")
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(f"# FINAL MASTER THESIS: {os.path.basename(self.pdf_path)}\n\n" + final_paper)
+        
+        # --- Phase 5: Aggregated Dossier (High Density) ---
+        console.print("\n[bold cyan]Phase 5: Compiling the Aggregated Scholarly Dossier (High Density)...[/bold cyan]")
         
         dossier_content = f"# Aggregated Scholarly Dossier: {os.path.basename(self.pdf_path)}\n\n"
         dossier_content += f"**Research Focus**: {self.user_prompt}\n\n"
@@ -207,7 +246,7 @@ class DeepResearchWorkflow:
             dossier_content += f"{'='*40}\n\n"
             dossier_content += compiled_notes[scholar.name]
             
-        dossier_path = os.path.join(self.log_dir, "5_Aggregated_Scholarly_Dossier.md")
+        dossier_path = os.path.join(self.log_dir, "6_Aggregated_Scholarly_Dossier.md")
         with open(dossier_path, "w", encoding="utf-8") as f:
             f.write(dossier_content)
             
@@ -221,9 +260,8 @@ class DeepResearchWorkflow:
 
         console.print(Panel.fit(
             f"✅ [bold green]Deep Research Complete![/bold green]\n\n"
-            f"1. Final Synthesis: [cyan]{output_file}[/cyan]\n"
-            f"2. High-Density Dossier: [cyan]{dossier_cache_id}[/cyan]\n"
-            f"3. Factual Cache: [cyan]{cache_id}[/cyan]",
+            f"1. Final Thesis:  [cyan]{output_file}[/cyan]\n"
+            f"2. Dossier Cache: [cyan]{dossier_cache_id}[/cyan]",
             border_style="green"
         ))
 

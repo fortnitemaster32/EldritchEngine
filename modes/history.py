@@ -34,8 +34,9 @@ def run_history_mode(script_dir):
         console.print("[yellow]No older generations found.[/yellow]")
         return
 
-    selected = questionary.select("Select a generation to export:", choices=choices + [questionary.Choice("Back", value=None)]).ask()
-    if not selected: return
+    selected = questionary.select("Select a generation to export:", choices=choices + [questionary.Choice("Back", value="back")]).ask()
+    if not selected or selected == "back":
+        return
 
     font_theme = pick_font_theme()
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
