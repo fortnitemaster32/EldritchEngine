@@ -49,11 +49,20 @@ def run_book_mode(script_dir):
     if style_choice == "Other":
         style_choice = questionary.text("Describe the tone:").ask() or "Custom"
 
-    book_title = questionary.text("Enter book title (or leave blank for AI):").ask()
+    book_title = questionary.text("Enter book title (or leave blank for AI to suggest):").ask()
     if not book_title:
-        title_agent = book_writer.LMStudioAgent("Title Gen", "Generator", "Suggest titles.")
-        res = title_agent.chat(f"Topic: {user_prompt}", context=research_notes[:10000])
-        book_title = res.splitlines()[0] if res else "Untitled Book"
+        with console.status("[cyan]Generating title suggestions...[/cyan]"):
+            # Temporary workflow to access title generation logic
+            temp_wf = book_writer.BookWriterWorkflow(user_prompt, research_notes, book_style=style_choice)
+            suggestions = temp_wf.generate_book_title()
+            
+        book_title = questionary.select(
+            "Select a book title:",
+            choices=suggestions + ["Custom..."]
+        ).ask()
+        
+        if book_title == "Custom...":
+            book_title = questionary.text("Enter custom title:").ask() or "Untitled Book"
 
     auto_accept = questionary.confirm("Enable auto-accept mode?", default=False).ask()
 

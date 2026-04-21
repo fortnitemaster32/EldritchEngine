@@ -174,17 +174,17 @@ class BookWriterWorkflow:
         prompt = f"Summarize the following text in {sentences} concise sentences:\n\n{text}\n\nSummary:"
         return self.condenser.chat(prompt, context="")
 
-    def generate_book_title(self) -> str:
+    def generate_book_title(self) -> list[str]:
         prompt = f"Book idea: {self.user_prompt}\nStyle: {self.book_style}\n\nSuggest five compelling book titles in a numbered list. Output only titles."
         response = self.title_agent.chat(prompt, context=self.research_notes[:20000])
         lines = [line.strip() for line in response.splitlines() if line.strip()]
         titles = []
         for line in lines:
-            if line[0].isdigit() and "." in line:
+            if line and line[0].isdigit() and "." in line:
                 titles.append(line.split(".", 1)[1].strip())
             else:
                 titles.append(line)
-        return titles[0] if titles else "Untitled Book"
+        return titles if titles else ["Untitled Book"]
 
     def _format_resume_overview(self) -> str:
         chapter_index = self.state.get("current_chapter", 0)
