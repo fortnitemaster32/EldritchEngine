@@ -13,6 +13,7 @@ def run_settings_mode():
         choices = [
             questionary.Choice(f"Concurrency (Current: {config['max_concurrency']})", value="concurrency"),
             questionary.Choice(f"LM Studio URL (Current: {config['lm_studio_url']})", value="url"),
+            questionary.Choice(f"Max Context Window (Current: {config.get('max_context_window', 32768)})", value="context"),
             questionary.Choice("Back", value="back")
         ]
         
@@ -35,4 +36,12 @@ def run_settings_mode():
                 config['lm_studio_url'] = val
                 config_manager.save_config(config)
                 console.print(f"[green]✓ Set LM Studio URL to {val}[/green]")
+                questionary.press_any_key_to_continue().ask()
+
+        elif choice == "context":
+            val = questionary.text("Enter Max Context Window (e.g. 32768, 65536):", default=str(config.get('max_context_window', 32768))).ask()
+            if val and val.isdigit():
+                config['max_context_window'] = int(val)
+                config_manager.save_config(config)
+                console.print(f"[green]✓ Set Max Context Window to {val}[/green]")
                 questionary.press_any_key_to_continue().ask()

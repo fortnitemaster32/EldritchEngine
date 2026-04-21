@@ -32,11 +32,26 @@ class LMStudioAgent:
         self.model = "local-model"
 
     def chat(self, user_input: str, context: str = "", history: List[Dict] = None, on_update: callable = None) -> str:
+        max_context = config_manager.get_setting("max_context_window") or 32768
+        
         messages = [{"role": "system", "content": self.system_prompt}]
         if history:
             messages.extend(history)
         
         full_content = f"### PDF CONTEXT ###\n{context}\n\n### TASK ###\n{user_input}" if context else user_input
+        
+        # Estimate tokens (Roughly 4 chars = 1 token)
+        estimated_tokens = (len(self.system_prompt) + len(full_content)) // 4
+        
+        if estimated_tokens > max_context:
+            console.print(f"[bold yellow]⚠️  Context Guard:[/bold yellow] Estimated tokens ({estimated_tokens}) exceed Max Context Window ({max_context}).")
+            console.print("[dim]Truncating context to fit hardware limits...[/dim]")
+            
+            # Truncate context to fit (leave room for system prompt and buffer)
+            allowed_chars = (max_context - 2000) * 4
+            context = context[:allowed_chars]
+            full_content = f"### PDF CONTEXT (TRUNCATED) ###\n{context}\n\n### TASK ###\n{user_input}"
+        
         messages.append({"role": "user", "content": full_content})
         
         start_time = time.time()
@@ -74,8 +89,19 @@ class LMStudioAgent:
                             "elapsed": elapsed
                         })
         except Exception as e:
-            console.print(f"[bold red]Stream Error:[/bold red] {e}")
-            # Fallback to non-streaming if needed, but for now we just error
+            if "context_length" in str(e).lower() or "maximum context" in str(e).lower():
+                console.print(Panel.fit(
+                    "❌ [bold red]CRITICAL ERROR: Context Window Exceeded[/bold red]\n\n"
+                    f"The prompt is too large for your current LM Studio settings.\n"
+                    f"Requested: ~{estimated_tokens} tokens\n\n"
+                    "SOLUTIONS:\n"
+                    "1. Increase 'Context Overflow Policy' in LM Studio to 'Truncate'.\n"
+                    "2. Increase 'Context Length' in LM Studio (if your VRAM allows).\n"
+                    "3. Reduce 'Max Context Window' in EldritchEngine Settings.",
+                    border_style="red"
+                ))
+            else:
+                console.print(f"[bold red]API Error:[/bold red] {e}")
             raise e
 
         return "".join(full_response)

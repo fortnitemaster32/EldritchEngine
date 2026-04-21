@@ -5,7 +5,8 @@ CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.j
 
 DEFAULT_CONFIG = {
     "max_concurrency": 2,
-    "lm_studio_url": "http://localhost:1234/v1"
+    "lm_studio_url": "http://localhost:1234/v1",
+    "max_context_window": 32768
 }
 
 def load_config():
