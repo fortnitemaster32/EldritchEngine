@@ -64,48 +64,59 @@ class LMStudioAgent:
         if on_update:
             on_update({"status": f"Ingesting {estimated_tokens}t...", "tps": 0, "tokens": 0})
 
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=0.7,
-                stream=True,
-                timeout=None # Disable timeout for massive prompts
-            )
+        max_retries = 3
+        retry_delay = 2
+        
+        for attempt in range(max_retries):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=0.7,
+                    stream=True,
+                    timeout=None # Disable timeout for massive prompts
+                )
 
-            for chunk in response:
-                if chunk.choices and chunk.choices[0].delta.content:
-                    if first_token_time is None:
-                        first_token_time = time.time()
-                    
-                    text = chunk.choices[0].delta.content
-                    full_response.append(text)
-                    token_count += 1
-                    
-                    if on_update and first_token_time:
-                        elapsed = time.time() - first_token_time
-                        tps = token_count / elapsed if elapsed > 0 else 0
-                        on_update({
-                            "status": "Generating",
-                            "tps": tps,
-                            "tokens": token_count,
-                            "elapsed": elapsed
-                        })
-        except Exception as e:
-            if "context_length" in str(e).lower() or "maximum context" in str(e).lower():
-                console.print(Panel.fit(
-                    "❌ [bold red]CRITICAL ERROR: Context Window Exceeded[/bold red]\n\n"
-                    f"The prompt is too large for your current LM Studio settings.\n"
-                    f"Requested: ~{estimated_tokens} tokens\n\n"
-                    "SOLUTIONS:\n"
-                    "1. Increase 'Context Overflow Policy' in LM Studio to 'Truncate'.\n"
-                    "2. Increase 'Context Length' in LM Studio (if your VRAM allows).\n"
-                    "3. Reduce 'Max Context Window' in EldritchEngine Settings.",
-                    border_style="red"
-                ))
-            else:
-                console.print(f"[bold red]API Error:[/bold red] {e}")
-            raise e
+                for chunk in response:
+                    if chunk.choices and chunk.choices[0].delta.content:
+                        if first_token_time is None:
+                            first_token_time = time.time()
+                        
+                        text = chunk.choices[0].delta.content
+                        full_response.append(text)
+                        token_count += 1
+                        
+                        if on_update and first_token_time:
+                            elapsed = time.time() - first_token_time
+                            tps = token_count / elapsed if elapsed > 0 else 0
+                            on_update({
+                                "status": "Generating",
+                                "tps": tps,
+                                "tokens": token_count,
+                                "elapsed": elapsed
+                            })
+                return "".join(full_response)
+
+            except Exception as e:
+                if attempt < max_retries - 1 and "context_length" not in str(e).lower():
+                    console.print(f"\n[yellow]⚠️ API Error (Attempt {attempt+1}): {e}. Retrying in {retry_delay}s...[/yellow]")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
+                else:
+                    if "context_length" in str(e).lower() or "maximum context" in str(e).lower():
+                        console.print(Panel.fit(
+                            "❌ [bold red]CRITICAL ERROR: Context Window Exceeded[/bold red]\n\n"
+                            f"The prompt is too large for your current LM Studio settings.\n"
+                            f"Requested: ~{estimated_tokens} tokens\n\n"
+                            "SOLUTIONS:\n"
+                            "1. Increase 'Context Overflow Policy' in LM Studio to 'Truncate'.\n"
+                            "2. Increase 'Context Length' in LM Studio (if your VRAM allows).\n"
+                            "3. Reduce 'Max Context Window' in EldritchEngine Settings.",
+                            border_style="red"
+                        ))
+                    else:
+                        console.print(f"[bold red]API Error:[/bold red] {e}")
+                    raise e
 
         return "".join(full_response)
 
@@ -151,12 +162,18 @@ class AgenticWorkflow:
         self.research_notes = preloaded_research
         self.use_enricher = use_enricher
 
-        # Agents
+        # High-Fidelity Agents (Synced with Registry)
         self.scholar = LMStudioAgent("The Scholar", "Lead Researcher", self._load_prompt("scholar.md"))
         self.strategist = LMStudioAgent("The Strategist", "Lead Philosopher", self._load_prompt("strategist.md"))
         self.manager = LMStudioAgent("The Manager", "Architect", self._load_prompt("architect.md"))
-        self.author = LMStudioAgent("The Author", "Master Writer", self._load_prompt("author.md"))
-        self.editor = LMStudioAgent("The Editor", "Chief Editor", self._load_prompt("editor.md"))
+        
+        # Core writing team
+        self.author = LMStudioAgent("The Author", "Visionary Writer", self._load_prompt("writer_visionary.md"))
+        self.editor = LMStudioAgent("The Editor", "Sculptor", self._load_prompt("editor_sculptor.md"))
+        
+        # Enricher team
+        self.lexicographer = LMStudioAgent("Lexicographer", "Vocabulary Specialist", self._load_prompt("lexicographer.md"))
+        self.precisionist = LMStudioAgent("Precisionist", "Tone Refiner", self._load_prompt("precisionist.md"))
 
     def _extract_pdf_content(self, pdf_path, extract_images):
         import fitz
