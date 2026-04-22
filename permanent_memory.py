@@ -56,8 +56,9 @@ class PermanentMemory:
         with open(self.memory_file, "w", encoding="utf-8") as f:
             json.dump(self.index, f, indent=2)
 
-    def _get_embedding(self, text: str) -> List[float]:
-        """Call LM Studio's embedding endpoint."""
+    def _get_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
+        """Call LM Studio's embedding endpoint with a batch of texts."""
+        if not texts: return []
         import urllib.request
         import json
         
@@ -70,7 +71,6 @@ class PermanentMemory:
         try:
             with urllib.request.urlopen(f"{url}/models") as res:
                 m_data = json.loads(res.read().decode("utf-8"))
-                # Try to find an embedding model, otherwise use the first loaded model
                 for m in m_data["data"]:
                     if "embed" in m["id"].lower():
                         model_name = m["id"]
@@ -78,26 +78,31 @@ class PermanentMemory:
                 if model_name == "default" and m_data["data"]:
                     model_name = m_data["data"][0]["id"]
         except:
-            pass # Fallback to default or nomic
+            pass 
 
         endpoint = f"{url}/embeddings"
         data = json.dumps({
             "model": model_name,
-            "input": text
+            "input": texts
         }).encode("utf-8")
         
         try:
             req = urllib.request.Request(endpoint, data=data, headers={"Content-Type": "application/json"})
-            with urllib.request.urlopen(req, timeout=10) as response:
+            with urllib.request.urlopen(req, timeout=30) as response:
                 res_data = json.loads(response.read().decode("utf-8"))
-                return res_data["data"][0]["embedding"]
+                # Ensure they are sorted by index
+                sorted_data = sorted(res_data["data"], key=lambda x: x["index"])
+                return [item["embedding"] for item in sorted_data]
         except Exception as e:
-            # Silent fail for now, UI will handle empty vector
             return []
+
+    def _get_embedding(self, text: str) -> List[float]:
+        """Fallback for single queries."""
+        res = self._get_embeddings_batch([text])
+        return res[0] if res else []
 
     def index_text(self, text: str, source_name: str, chunk_size: int = 1000):
         """Chunk and index text into the vault."""
-        # Simple overlap chunking
         chunks = []
         for i in range(0, len(text), chunk_size - 100):
             chunks.append(text[i:i + chunk_size])
@@ -111,17 +116,22 @@ class PermanentMemory:
         ) as progress:
             task = progress.add_task(f"Indexing {source_name}...", total=len(chunks))
             
-            for i, chunk in enumerate(chunks):
-                vector = self._get_embedding(chunk)
-                if vector:
-                    self.index.append({
-                        "id": f"{source_name}_{i}",
-                        "source": source_name,
-                        "text": chunk,
-                        "vector": vector,
-                        "timestamp": time.time()
-                    })
-                progress.update(task, advance=1)
+            batch_size = 50
+            for i in range(0, len(chunks), batch_size):
+                batch_chunks = chunks[i:i+batch_size]
+                vectors = self._get_embeddings_batch(batch_chunks)
+                
+                # If batch fails, skip or we'd need fallback. For now, trust the batch.
+                if vectors and len(vectors) == len(batch_chunks):
+                    for j, vector in enumerate(vectors):
+                        self.index.append({
+                            "id": f"{source_name}_{i+j}",
+                            "source": source_name,
+                            "text": batch_chunks[j],
+                            "vector": vector,
+                            "timestamp": time.time()
+                        })
+                progress.update(task, advance=len(batch_chunks))
         
         self._save_index()
 
