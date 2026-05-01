@@ -5,10 +5,10 @@ The ultimate multi-agent AI writing system powered by [**LM Studio**](https://lm
 ## Disclaimer
 This project was developed with the assistance of AI tools. While efforts have been made to ensure quality and accuracy, please review and verify all outputs before use.
 
-> **Deep Research Tip**: Always combine Deep Research with a regular research cache for optimal output quality. You can use regular research alone, but avoid using only Deep Research without the cache.
+> **Deep Research Tip**: Always combine Deep Research with a regular research cache for optimal output quality. You can use regular research alone, but avoid using only Deep Research without the regular cache.
 
 ## License
-This project is licensed under the MIT License for personal, non-commercial use. For organizational or commercial use.
+This project is licensed under the MIT License for personal, non-commercial use. 
 
 ## The Agentic Architecture
 This system utilizes a sophisticated pipeline of specialized agents, each with a distinct persona and mission, broken into specific modes of operation.
@@ -70,7 +70,7 @@ For best performance, I recommend using the **Gemma 4 E2B IT** model in LM Studi
     python tui.py
     ```
 
-## ✨ Key Features
+## Key Features
 - **Keyboard-Driven TUI**: Rapid mode and file selection.
 - **Decoupled Research Caching**: Analyze a massive PDF once, then write 10 different essays about it without re-reading the book.
 - **Deep Research Debate**: PhD agents literally debate each other's findings to eliminate blind spots.
